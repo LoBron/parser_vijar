@@ -1,9 +1,18 @@
 import threading
 import concurrent.futures
-
-
 import requests
 from bs4 import BeautifulSoup as BS
+
+def get_category_page(name_category, page):
+    return requests.get(f'https://viyar.ua/catalog/{name_category}/page-' + str(page))
+
+def get_category_pages(name_category, pages):
+    response_page_list = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=pages) as executor:
+        future_list = [executor.submit(get_category_page, name_category, page) for page in range(1, pages + 1)]
+        for future in concurrent.futures.as_completed(future_list):
+            response_page_list.append(future.result())
+    return response_page_list
 
 def get_items_hrefs(response_page_list):
     items_hrefs = []
@@ -16,14 +25,16 @@ def get_items_hrefs(response_page_list):
                 items_hrefs.append(f"https://viyar.ua{product[0].get('href')}")
     return items_hrefs
 
-def add_items_data(response_items, path):
-    """https://docs.python.org/3.8/library/concurrent.futures.html#threadpoolexecutor"""
-    items_data = []
+def get_item_page(item_href):
+    return requests.get(item_href)
+
+def get_items_pages(items_list):
+    items_pages = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        future_list = [executor.submit(add_item_data, response_item, path) for response_item in response_items]
+        future_list = [executor.submit(get_item_page, item) for item in items_list]
         for future in concurrent.futures.as_completed(future_list):
-            items_data.append(future.result())
-    return items_data
+            items_pages.append(future.result())
+    return items_pages
 
 def add_item_data(response_item, path):
     """Возвращает данные о товаре и загружает его фотографии"""
@@ -37,19 +48,14 @@ def add_item_data(response_item, path):
     # print(f"object '{object_data['name']}' added")
     return item_data
 
-
-def get_item_page(item_href):
-    return requests.get(item_href)
-
-def get_items_pages(items_list, amount_processor_cores):
-    items_pages = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=amount_processor_cores*2) as executor:
-        future_list = [executor.submit(get_item_page, item) for item in items_list]
+def add_items_data(response_items, path):
+    """https://docs.python.org/3.8/library/concurrent.futures.html#threadpoolexecutor"""
+    items_data = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_list = [executor.submit(add_item_data, response_item, path) for response_item in response_items]
         for future in concurrent.futures.as_completed(future_list):
-            items_pages.append(future.result())
-    return items_pages
-
-
+            items_data.append(future.result())
+    return items_data
 
 # class DataProducts:
 #     def __init__(self, name):
@@ -64,31 +70,6 @@ def get_items_pages(items_list, amount_processor_cores):
 #             return self.data.get(name_category)
 #         else:
 #             return self.data
-
-# def add_page_data(items, path):
-#     """https://docs.python.org/3.8/library/concurrent.futures.html#threadpoolexecutor"""
-#     page = []
-#     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-#         future_to_item = [executor.submit(add_item_data, item, path) for item in items]
-#         for future in concurrent.futures.as_completed(future_to_item):
-#             page.append(future.result())
-#     return page
-
-# def add_item_data(item, path):
-#     """Возвращает данные о товаре и загружает его фотографии"""
-#     object_data = {}
-#
-#     product = item.select('a')
-#     href_product = f"https://viyar.ua{product[0].get('href')}"
-#     product_detail = requests.get(href_product)
-#     html_item = BS(product_detail.content, 'html.parser')
-#     object_data['name'] = get_name(html_item)
-#     object_data['price'] = get_price(html_item)
-#     object_data['properties'] = get_properties(html_item)
-#     object_data['photos'] = get_photos(object_data['name'], html_item)
-#     download_photos(object_data.get('photos'), path)
-#     # print(f"object '{object_data['name']}' added")
-#     return object_data
 
 def get_name(html_item):
     """Возвращает наименование товара"""

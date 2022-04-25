@@ -13,20 +13,9 @@ timer = time.time()
 pages = 12 #12
 amount_processor_cores = 4
 #########################################################################################################################
-def get_category_page(name_category, page):
-    return requests.get(f'https://viyar.ua/catalog/{name_category}/page-' + str(page))
-
-def get_category_pages(name_category, amount_processor_cores):
-    response_page_list = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=amount_processor_cores * 2) as executor:
-        future_list = [executor.submit(get_category_page, name_category, page) for page in range(1, pages + 1)]
-        for future in concurrent.futures.as_completed(future_list):
-            response_page_list.append(future.result())
-    return response_page_list
-
 
 timer_0 = time.time()
-response_page_list = get_category_pages(name_category, amount_processor_cores)
+response_page_list = get_category_pages(name_category, pages)
 print('список страниц добавлен')
 print(f"0) время выполнения - {time.time() - timer_0}\n")
 ########################################################################################################################
@@ -56,7 +45,7 @@ print(f"1) время выполнения - {time.time() - timer_1}\n")
 ########################################################################################################################
 
 timer_2 = time.time()
-response_items = get_items_pages(items_list, amount_processor_cores)
+response_items = get_items_pages(items_list)
 print(response_items)
 print(f"2) время выполнения - {time.time() - timer_2}\n")
 
