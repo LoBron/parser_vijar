@@ -12,7 +12,7 @@ page = 1
 timer = time.time()
 pages = 12 #12
 amount_processor_cores = 4
-########################################################################################################################
+#########################################################################################################################
 def get_category_page(name_category, page):
     return requests.get(f'https://viyar.ua/catalog/{name_category}/page-' + str(page))
 
