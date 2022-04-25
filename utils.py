@@ -1,7 +1,9 @@
 import threading
+import time
 import concurrent.futures
 import requests
 from bs4 import BeautifulSoup as BS
+
 
 def get_category_page(name_category, page):
     return requests.get(f'https://viyar.ua/catalog/{name_category}/page-' + str(page))
@@ -9,9 +11,12 @@ def get_category_page(name_category, page):
 def get_category_pages(name_category, pages):
     response_page_list = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=pages) as executor:
+        timer_0 = time.time()
         future_list = [executor.submit(get_category_page, name_category, page) for page in range(1, pages + 1)]
         for future in concurrent.futures.as_completed(future_list):
             response_page_list.append(future.result())
+            print(f"1) время выполнения - {time.time() - timer_0}")
+        print(f"1) время выполнения ФУНКЦИИ - {time.time() - timer_0}\n")
     return response_page_list
 
 def get_items_hrefs(response_page_list):
@@ -57,20 +62,6 @@ def add_items_data(response_items, path):
             items_data.append(future.result())
     return items_data
 
-# class DataProducts:
-#     def __init__(self, name):
-#         self.name = name
-#         self.data = {}
-#
-#     def add_data(self, name_category, data):
-#         self.data[name_category] = data
-#
-#     def get_data(self, name_category=None):
-#         if name_category:
-#             return self.data.get(name_category)
-#         else:
-#             return self.data
-
 def get_name(html_item):
     """Возвращает наименование товара"""
     name = html_item.select('.product_name > h1 > b')[0].text.strip()
@@ -78,8 +69,13 @@ def get_name(html_item):
 
 def get_price(html_item):
     """Возвращает стоимость товара за единицу"""
-    price = float(html_item.select('span.price')[0].text.strip())
-    return price
+    try:
+        price = float(html_item.select('span.price')[0].text.strip())
+    except ValueError:
+        price_l = html_item.select('span.price')[0].text.strip().split()
+        return float(price_l[0]+price_l[1])
+    else:
+        return price
 
 def get_properties(html_item):
     """Возвращает характеристики товара"""
