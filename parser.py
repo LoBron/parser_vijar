@@ -1,13 +1,13 @@
 from utils import *
 import time
 
-data_products = DataProducts('catalog_vijar')
+# data_products = DataProducts('catalog_vijar')
 name_category = 'metiznaya_produktsiya'
 path = 'products_data/'
 data = []
 page = 1
-
-while page <= 10:
+timer = time.time()
+while page <= 12:
     category_list = requests.get(f'https://viyar.ua/catalog/{name_category}/page-' + str(page))
     html = BS(category_list.content, 'html.parser')
     items = html.select('.product_prewiew')
@@ -23,6 +23,8 @@ while page <= 10:
     else:
         break
 
-data_products.add_data(name_category, data)
+print(f"Время выполнения - {time.time()-timer}")
+
+# data_products.add_data(name_category, data)
 # print(data_products.get_data())
 
