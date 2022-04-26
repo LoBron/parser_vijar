@@ -46,6 +46,7 @@ def add_item_data(response_item, path):
     item_data = {}
     item = BS(response_item.content, 'html.parser')
     item_data['name'] = get_name(item)
+    item_data['slug'] = get_slug(response_item)
     item_data['price'] = get_price(item)
     item_data['properties'] = get_properties(item)
     item_data['photos'] = get_photos(item_data['name'], item)
@@ -66,6 +67,10 @@ def get_name(html_item):
     """Возвращает наименование товара"""
     name = html_item.select('.product_name > h1 > b')[0].text.strip()
     return name
+
+def get_slug(response_item):
+    url = response_item.url
+    return url.split('/')[-2]
 
 def get_price(html_item):
     """Возвращает стоимость товара за единицу"""
