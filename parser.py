@@ -41,10 +41,12 @@ from utils import *
 
 
 main_url = 'https://viyar.ua'
-data = get_categories_info(main_url)
 path = 'products_data/'
-data = add_products_data(data, main_url, path)
-print('!!!Завершено!!!')
+
+data = get_categories_info(main_url)
+
+print(add_products_data(data, main_url, path))
+
 
 # def add_items_data(response_items, path):
 #     """https://docs.python.org/3.8/library/concurrent.futures.html#threadpoolexecutor"""
