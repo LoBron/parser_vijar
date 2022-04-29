@@ -44,7 +44,6 @@ main_url = 'https://viyar.ua'
 path = 'products_data/'
 
 data = get_categories_info(main_url)
-
 print(add_products_data(data, main_url, path))
 
 

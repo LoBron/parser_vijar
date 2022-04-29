@@ -11,15 +11,11 @@ def get_categories_info(main_url):
     response_obj = requests.get(main_url)
     html_page = BS(response_obj.content, 'html.parser')
     items0_list = html_page.select('.main-menu > .top_level > li')
-    n = 2  #####################
-    for item0 in items0_list:
+
+    for item0 in items0_list[1:2]: #items0_list: #####################
         cat0_name = item0.find_all('span')[0].text.strip()
         if cat0_name in ['Фасады', 'Фасади']:
             continue
-
-        elif n > 2:  #####################
-            break  #####################
-
         else:
             cat_level_0 = {}
             cat_level_0["name"] = cat0_name
@@ -27,7 +23,7 @@ def get_categories_info(main_url):
             cat_level_0["categories_level_1"] = []
 
             items1_list = item0.select('.hidden-label > div')
-            for item1 in items1_list[1:3]: #items1_list: #####################
+            for item1 in items1_list[:3:2]: #items1_list: #####################
                 if len(item1) > 0:
                     links = item1.find_all('a')
                     cat1_name = links[0].text.strip()
@@ -35,21 +31,21 @@ def get_categories_info(main_url):
                         continue
                     else:
                         cat_level_1 = {}
-                        cat_level_1["name"] = cat1_name  #links[0]["title"]
-                        cat_level_1["href"] = links[0]["href"]
+                        cat_level_1["name"] = cat1_name
+                        href_list_1 = links[0]["href"].split("/")
+                        cat_level_1["href"] = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
                         cat_level_1["slug"] = cat_level_1["href"].split('/')[-2]
                         cat_level_1["categories_level_2"] = []
                         if len(links) > 1:
-                            for n in range(1, len(links)):
+                            for n in range(1, len(links)-1): #range(1, len(links)):  #####################
                                 cat_level_2 = {}
                                 cat_level_2["name"] = links[n].text.strip()
-                                cat_level_2["href"] = links[n]["href"]
+                                href_list_2 = links[n]["href"].split("/")
+                                cat_level_2["href"] = f'/{href_list_2[-3]}/{href_list_2[-2]}/'
                                 cat_level_2["slug"] = cat_level_2["href"].split('/')[-2]
                                 cat_level_1["categories_level_2"].append(cat_level_2)
                         cat_level_0["categories_level_1"].append(cat_level_1)
             categories_info.append(cat_level_0)
-
-        n += 1  #####################
     print('Cписок с данными о категориях создан\n')
     return categories_info
 
@@ -74,14 +70,18 @@ def get_products_data(category_url, path_to_download):
     """Возвращает список с данными о товарах внутри категории"""
     response_pages_list = get_response_pages(category_url=category_url)
     print(f'    получили responces в количестве {len(response_pages_list)} шт')
+
     items_url_list = get_items_urls(response_pages_list)
     print(f'    получили items_urls товаров в количестве {len(items_url_list)} шт')
+
     if len(items_url_list) > 0:
+
         response_items_list = get_items_responses(items_url_list)
         print(f'    получили response_items товаров в количестве {len(response_items_list)} шт')
-        # print(response_items)
+
         products_data_list = get_items_data(response_items_list, path_to_download)
         print(f'    получили products_data в количестве {len(products_data_list)} шт')
+
         return products_data_list
     return []
 
@@ -188,18 +188,19 @@ def get_slug(item_response, code):
 def get_price(item_html):
     """Возвращает стоимость товара за единицу"""
     try:
-        price = float(item_html.select('span.price')[0].text.strip())
-    except ValueError:
-        price = ''
-        list_p = item_html.select('span.price')[0].text.strip().split()
-        print(list_p)
-        for i in list_p:
-            price += i
-        return float(price)
-    except LookupError:
+        try:
+            price = float(item_html.select('span.price')[0].text.strip())
+        except ValueError:
+            price = ''
+            list_p = item_html.select('span.price')[0].text.strip().split()
+            for i in list_p:
+                price += i
+            price = float(price)
+    except Exception:
         return random.choice(range(1700, 2500, 3))
     else:
         return price
+
 
 def get_properties(item_html):
     """Возвращает характеристики товара"""
@@ -214,8 +215,8 @@ def get_properties(item_html):
                 n += 1
             else:
                 break
-    except LookupError:
-        properties['Exeption'] = 'свойства не добавлены'
+    except Exception as ex:
+        properties[f'Exception - {ex}'] = 'свойства не добавлены'
     return properties
 
 def get_photos_urls(name, item_html):
