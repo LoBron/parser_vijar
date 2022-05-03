@@ -85,18 +85,38 @@ def get_products_data(category_url, path_to_download):
         return products_data_list
     return []
 
+# def get_response_pages(category_url):
+#     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
+#     response_page_list = []
+#     n = 1
+#     while True:
+#         response_page = requests.get(f'{category_url}page-{n}/')
+#         if response_page.status_code == 200: #in range(200, 207):   #####################
+#             response_page_list.append(response_page)
+#             # print(f'страница {n} добавлена')
+#             n += 1
+#         else:
+#             break
+#     return response_page_list
+
+def get_response_page(category_url, number_page):
+    return requests.get(f'{category_url}page-{number_page}/')
+
 def get_response_pages(category_url):
     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
     response_page_list = []
-    n = 1
-    while True:
-        response_page = requests.get(f'{category_url}page-{n}/')
-        if response_page.status_code == 200: #in range(200, 207):   #####################
-            response_page_list.append(response_page)
-            # print(f'страница {n} добавлена')
-            n += 1
-        else:
-            break
+    response_page = requests.get(f'{category_url}')
+    response_page_list.append(response_page)
+    item_html = BS(response_page.content, 'html.parser')
+    paggination_list = item_html.select('.paggination > li')
+    if 0 <= len(paggination_list) <= 2:
+        return response_page_list
+    else:
+        n = int(paggination_list[-2].text)
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_list = [executor.submit(get_response_page, category_url, i) for i in range(2, n+1)]
+        for future in concurrent.futures.as_completed(future_list):
+            response_page_list.append(future.result())
     return response_page_list
 
 # def get_category_pages(name_category, pages):
@@ -110,18 +130,38 @@ def get_response_pages(category_url):
 #         print(f"1) время выполнения ФУНКЦИИ - {time.time() - timer_0}\n")
 #     return response_page_list
 
+def get_urls(response_page):
+    url_list = []
+    html = BS(response_page.content, 'html.parser')
+    items = html.select('.product_prewiew')
+    if len(items):
+        for item in items:
+            product = item.select('a')
+            url_list.append(f"https://viyar.ua{product[0].get('href')}")
+    return url_list
+
 def get_items_urls(response_page_list):
     """Возвращает список URL адресов всех товаров внутри категории"""
     items_url_list = []
     if len(response_page_list) > 0:
-        for response_page in response_page_list:
-            html = BS(response_page.content, 'html.parser')
-            items = html.select('.product_prewiew')
-            if len(items):
-                for item in items:
-                    product = item.select('a')
-                    items_url_list.append(f"https://viyar.ua{product[0].get('href')}")
+        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+            future_list = [executor.submit(get_urls, response_page) for response_page in response_page_list]
+            for future in concurrent.futures.as_completed(future_list):
+                items_url_list += future.result()
     return items_url_list
+
+# def get_items_urls(response_page_list):
+#     """Возвращает список URL адресов всех товаров внутри категории"""
+#     items_url_list = []
+#     if len(response_page_list) > 0:
+#         for response_page in response_page_list:
+#             html = BS(response_page.content, 'html.parser')
+#             items = html.select('.product_prewiew')
+#             if len(items):
+#                 for item in items:
+#                     product = item.select('a')
+#                     items_url_list.append(f"https://viyar.ua{product[0].get('href')}")
+#     return items_url_list
 
 def get_item_response(item_url):
     """Возвращает response обьект на product_detail"""
@@ -130,7 +170,7 @@ def get_item_response(item_url):
 def get_items_responses(items_url_list):
     """Возвращает список response обьектов на все товары внутри категории"""
     items_response_list = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+    with concurrent.futures.ThreadPoolExecutor() as executor:
         future_list = [executor.submit(get_item_response, item_url) for item_url in items_url_list]
         for future in concurrent.futures.as_completed(future_list):
             items_response_list.append(future.result())
@@ -161,12 +201,22 @@ def get_item_data(item_response, path_to_download):
 #         for future in concurrent.futures.as_completed(future_list):
 #             items_data.append(future.result())
 #     return items_data
+
 def get_items_data(items_response_list, path_to_download):
     """Возврашает список данных о товарах и загружает их фотографии в path_to_download"""
     items_data = []
-    for item_response in items_response_list:
-        items_data.append(get_item_data(item_response, path_to_download))
+    with concurrent.futures.ProcessPoolExecutor(max_workers=2) as executor:
+        future_list = [executor.submit(get_item_data, item_response, path_to_download) for item_response in items_response_list]
+        for future in concurrent.futures.as_completed(future_list):
+            items_data.append(future.result())
     return items_data
+
+# def get_items_data(items_response_list, path_to_download):
+#     """Возврашает список данных о товарах и загружает их фотографии в path_to_download"""
+#     items_data = []
+#     for item_response in items_response_list:
+#         items_data.append(get_item_data(item_response, path_to_download))
+#     return items_data
 
 def get_name(item_html, code):
     """Возвращает наименование товара"""
