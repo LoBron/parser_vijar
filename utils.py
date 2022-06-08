@@ -1,5 +1,7 @@
 import random
 import threading
+import asyncio
+import aiohttp
 import time
 import concurrent.futures
 import requests
@@ -66,7 +68,7 @@ def add_products_data(data, main_url, path_to_download):
                 print(f'Добавили в категорию {data[i].get("categories_level_1")[j]["name"]} товары в количестве {len(data[i].get("categories_level_1")[j]["products"])} шт\n')
     return data
 
-def get_products_data(category_url, path_to_download):
+def get_products_data1(category_url, path_to_download):
     """Возвращает список с данными о товарах внутри категории"""
     response_pages_list = get_response_pages(category_url=category_url)
     print(f'    получили responces в количестве {len(response_pages_list)} шт')
@@ -85,8 +87,25 @@ def get_products_data(category_url, path_to_download):
         return products_data_list
     return []
 
-async def get_products_data1(category_url, path_to_download, session):
-    pass
+def get_products_data(category_url, path_to_download):
+    """Возвращает список с данными о товарах внутри категории"""
+    session = aiohttp.ClientSession()
+    response_pages_list = get_response_pages(category_url=category_url, session=session)
+    print(f'    получили responces в количестве {len(response_pages_list)} шт')
+
+    items_url_list = get_items_urls(response_pages_list)
+    print(f'    получили items_urls товаров в количестве {len(items_url_list)} шт')
+
+    if len(items_url_list) > 0:
+        response_items_list = get_items_responses(items_url_list)
+        print(f'    получили response_items товаров в количестве {len(response_items_list)} шт')
+
+        products_data_list = get_items_data(response_items_list, path_to_download)
+        print(f'    получили products_data в количестве {len(products_data_list)} шт')
+
+        return products_data_list
+    session.close()
+    return []
 # def get_response_pages(category_url):
 #     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
 #     response_page_list = []
@@ -101,10 +120,12 @@ async def get_products_data1(category_url, path_to_download, session):
 #             break
 #     return response_page_list
 
-def get_response_page(category_url, number_page):
-    return requests.get(f'{category_url}page-{number_page}/')
+async def get_response_page(category_url, number_page, session):
+    async with session.get(f'{category_url}page-{number_page}/') as response:
+        return await response.text()
+        # requests.get(f'{category_url}page-{number_page}/')
 
-def get_response_pages(category_url):
+async def get_response_pages(category_url, session):
     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
     response_page_list = []
     response_page = requests.get(f'{category_url}')
@@ -115,11 +136,15 @@ def get_response_pages(category_url):
         return response_page_list
     else:
         n = int(paggination_list[-2].text)
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_list = [executor.submit(get_response_page, category_url, i) for i in range(2, n+1)]
-        for future in concurrent.futures.as_completed(future_list):
-            response_page_list.append(future.result())
+        task_list = [asyncio.create_task(get_response_page(category_url, i, session)) for i in range(2, n + 1)]
+        for i in range(len(task_list)):
+            response_page_list.append(await task_list[i])
     return response_page_list
+    # with concurrent.futures.ThreadPoolExecutor() as executor:
+    #     future_list = [executor.submit(get_response_page, category_url, i) for i in range(2, n+1)]
+    #     for future in concurrent.futures.as_completed(future_list):
+    #         response_page_list.append(future.result())
+    # return response_page_list
 
 # def get_category_pages(name_category, pages):
 #     response_page_list = []

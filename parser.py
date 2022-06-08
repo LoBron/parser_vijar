@@ -40,11 +40,13 @@ from utils import *
 # print(add_item_data(a, path))
 
 if __name__ == '__main__':
+
     main_url = 'https://viyar.ua'
     path = 'products_data/'
 
     data = get_categories_info(main_url)
     print(add_products_data(data, main_url, path))
+
 
 
 # def add_items_data(response_items, path):
