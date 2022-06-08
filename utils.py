@@ -85,6 +85,8 @@ def get_products_data(category_url, path_to_download):
         return products_data_list
     return []
 
+async def get_products_data1(category_url, path_to_download, session):
+    pass
 # def get_response_pages(category_url):
 #     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
 #     response_page_list = []
@@ -175,6 +177,8 @@ def get_items_responses(items_url_list):
         for future in concurrent.futures.as_completed(future_list):
             items_response_list.append(future.result())
     return items_response_list
+
+
 
 def get_item_data(item_response, path_to_download):
     """Возвращает данные о товаре и загружает его фотографии в path_to_download"""

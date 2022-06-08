@@ -1,7 +1,10 @@
 import concurrent.futures
 import random
 import threading
+import asyncio
 import time
+
+import aiohttp
 import requests
 from bs4 import BeautifulSoup as BS
 def get_response_pages(category_url):
@@ -86,6 +89,7 @@ def get_items_urls1(response_page_list):
             for future in concurrent.futures.as_completed(future_list):
                 items_url_list += future.result()
     return items_url_list
+
 def get_item_response(item_url):
     """Возвращает response обьект на product_detail"""
     return requests.get(item_url)
@@ -98,6 +102,8 @@ def get_items_responses(items_url_list):
         for future in concurrent.futures.as_completed(future_list):
             items_response_list.append(future.result())
     return items_response_list
+
+
 def get_item_data(item_response, path_to_download):
     """Возвращает данные о товаре и загружает его фотографии в path_to_download"""
     item_data = {}
@@ -218,16 +224,45 @@ def download_photo(photo_url, path):
     img.write(p.content)
     img.close()
 
-if __name__ == '__main__':
+async def main():
+    session = aiohttp.ClientSession()
+
     t1 = time.time()
     path_to_download = 'products_data/'
     cat_url = 'https://viyar.ua/catalog/metiznaya_produktsiya/'
-    response_page_list = get_response_pages(cat_url)
+    t0 = time.time()
+    response_page_list = get_response_pages2(cat_url)
+    print(time.time() - t0)
     print(f'    получили responces в количестве {len(response_page_list)} шт')
-    items_url_list = get_items_urls(response_page_list)
+    t0 = time.time()
+    items_url_list = get_items_urls1(response_page_list)
+    print(time.time() - t0)
     print(f'    получили items_urls товаров в количестве {len(items_url_list)} шт')
+    t0 = time.time()
     response_items_list = get_items_responses(items_url_list)
+    print(time.time() - t0)
     print(f'    получили response_items товаров в количестве {len(response_items_list)} шт')
-    products_data_list = get_items_data(response_items_list, path_to_download)
+    t0 = time.time()
+    products_data_list = get_items_data1(response_items_list, path_to_download)
+    print(time.time() - t0)
     print(f'    получили products_data в количестве {len(products_data_list)} шт')
     print(time.time() - t1)
+
+    await session.close()
+
+if __name__ == '__main__':
+
+
+async def main():
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://viyar.ua/') as response:
+
+            print("Status:", response.status)
+            print("Content-type:", response.headers['content-type'])
+
+            html = await response.text()
+            print("Body:", html[:15], "...")
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(main())
