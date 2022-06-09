@@ -90,7 +90,7 @@ def get_products_data1(category_url, path_to_download):
 def get_products_data(category_url, path_to_download):
     """Возвращает список с данными о товарах внутри категории"""
     session = aiohttp.ClientSession()
-    response_pages_list = get_response_pages(category_url=category_url, session=session)
+    response_pages_list = asyncio.run(get_response_pages(category_url=category_url, session=session))
     print(f'    получили responces в количестве {len(response_pages_list)} шт')
 
     items_url_list = get_items_urls(response_pages_list)
@@ -106,26 +106,15 @@ def get_products_data(category_url, path_to_download):
         return products_data_list
     session.close()
     return []
-# def get_response_pages(category_url):
-#     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
-#     response_page_list = []
-#     n = 1
-#     while True:
-#         response_page = requests.get(f'{category_url}page-{n}/')
-#         if response_page.status_code == 200: #in range(200, 207):   #####################
-#             response_page_list.append(response_page)
-#             # print(f'страница {n} добавлена')
-#             n += 1
-#         else:
-#             break
-#     return response_page_list
+
+
+#######################################################################################
 
 async def get_response_page(category_url, number_page, session):
     async with session.get(f'{category_url}page-{number_page}/') as response:
         return await response.text()
-        # requests.get(f'{category_url}page-{number_page}/')
 
-async def get_response_pages(category_url, session):
+async def get_response_pages(category_url):
     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
     response_page_list = []
     response_page = requests.get(f'{category_url}')
@@ -136,26 +125,15 @@ async def get_response_pages(category_url, session):
         return response_page_list
     else:
         n = int(paggination_list[-2].text)
-        task_list = [asyncio.create_task(get_response_page(category_url, i, session)) for i in range(2, n + 1)]
-        for i in range(len(task_list)):
-            response_page_list.append(await task_list[i])
+        async with aiohttp.ClientSession() as session:
+            task_list = [asyncio.create_task(get_response_page(category_url, i, session)) for i in range(2, n + 1)] #(2, n + 1)]
+            for future in asyncio.as_completed(task_list):
+                response_page_list.append(await future)
+        await asyncio.sleep(0.05)
     return response_page_list
-    # with concurrent.futures.ThreadPoolExecutor() as executor:
-    #     future_list = [executor.submit(get_response_page, category_url, i) for i in range(2, n+1)]
-    #     for future in concurrent.futures.as_completed(future_list):
-    #         response_page_list.append(future.result())
-    # return response_page_list
 
-# def get_category_pages(name_category, pages):
-#     response_page_list = []
-#     with concurrent.futures.ThreadPoolExecutor(max_workers=pages) as executor:
-#         timer_0 = time.time()
-#         future_list = [executor.submit(get_category_page, name_category, page) for page in range(1, pages + 1)]
-#         for future in concurrent.futures.as_completed(future_list):
-#             response_page_list.append(future.result())
-#             print(f"1) время выполнения - {time.time() - timer_0}")
-#         print(f"1) время выполнения ФУНКЦИИ - {time.time() - timer_0}\n")
-#     return response_page_list
+#######################################################################################
+
 
 def get_urls(response_page):
     url_list = []
