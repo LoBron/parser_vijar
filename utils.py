@@ -126,7 +126,7 @@ async def get_response_pages(category_url):
     else:
         n = int(paggination_list[-2].text)
         async with aiohttp.ClientSession() as session:
-            task_list = [asyncio.create_task(get_response_page(category_url, i, session)) for i in range(2, n + 1)] #(2, n + 1)]
+            task_list = [asyncio.create_task(get_response_page(category_url, i, session)) for i in range(2, n + 1)] #(2, n + 1)
             for future in asyncio.as_completed(task_list):
                 response_page_list.append(await future)
         await asyncio.sleep(0.05)
@@ -137,19 +137,22 @@ async def get_response_pages(category_url):
 
 def get_urls(response_page):
     url_list = []
-    html = BS(response_page.content, 'html.parser')
-    items = html.select('.product_prewiew')
-    if len(items):
-        for item in items:
-            product = item.select('a')
-            url_list.append(f"https://viyar.ua{product[0].get('href')}")
+    try:
+        html = BS(response_page, 'html.parser')
+        items = html.select('.product_prewiew')
+        if len(items):
+            for item in items:
+                product = item.select('a')
+                url_list.append(f"https://viyar.ua{product[0].get('href')}")
+    except Exception as ex:
+        print(f'!------------------{ex}------------------!')
     return url_list
 
 def get_items_urls(response_page_list):
     """Возвращает список URL адресов всех товаров внутри категории"""
     items_url_list = []
     if len(response_page_list) > 0:
-        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+        with concurrent.futures.ProcessPoolExecutor() as executor:
             future_list = [executor.submit(get_urls, response_page) for response_page in response_page_list]
             for future in concurrent.futures.as_completed(future_list):
                 items_url_list += future.result()
