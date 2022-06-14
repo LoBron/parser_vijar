@@ -1,7 +1,7 @@
-import random
-import multiprocessing
+import time
+
 from utils import *
-# import time
+
 #
 # categories = {'nozhki_roliki_opory': 3} #'metiznaya_produktsiya': 4,
 # path = 'products_data/'
@@ -40,12 +40,13 @@ from utils import *
 # print(add_item_data(a, path))
 
 if __name__ == '__main__':
-
+    s = time.time()
     main_url = 'https://viyar.ua'
     path = 'products_data/'
 
     data = get_categories_info(main_url)
-    print(add_products_data(data, main_url, path))
+    add_products_data(data, main_url, path)
+    print(f'затраченное время {time.time()-s}')
 
 
 
