@@ -41,7 +41,7 @@ from utils import *
 
 if __name__ == '__main__':
     s = time.time()
-    main_url = 'https://viyar.ua'
+    main_url = 'https://viyar.ua/catalog'
     path = 'products_data/'
 
     data = get_categories_info(main_url)

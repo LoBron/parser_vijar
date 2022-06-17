@@ -1,11 +1,10 @@
 import random
 import threading
 import asyncio
-import aiohttp
-import aiofiles
 import time
 import concurrent.futures
 import requests
+from aiohttp import ClientSession, ClientError
 from bs4 import BeautifulSoup as BS
 
 
@@ -50,50 +49,50 @@ def get_categories_info(main_url):
                                 cat_level_1["categories_level_2"].append(cat_level_2)
                         cat_level_0["categories_level_1"].append(cat_level_1)
             categories_info.append(cat_level_0)
-    print('Cписок с данными о категориях создан\n')
+    print('Cписок с данными о разделах создан\n')
     return categories_info
 
 
 def add_products_data(data, main_url, path_to_download):
     """Добавляет к данным о категоряих данные об их товарах и возвращает полученный список с категориями"""
     for i in range(len(data)):  # range(len(data)):
+        print(f'Добавляем данные в раздел {data[i]["name"]}\n')
         for j in range(len(data[i].get("categories_level_1"))):
             if len(data[i].get("categories_level_1")[j].get("categories_level_2")) > 0:
                 for k in range(len(data[i].get("categories_level_1")[j].get("categories_level_2"))):
-                    url = main_url + data[i].get("categories_level_1")[j].get("categories_level_2")[k]['href']
+                    url = main_url[:-8] + data[i].get("categories_level_1")[j].get("categories_level_2")[k]['href']
                     print(
-                        f'Добавляем список с данными о товарах внутри категории {data[i].get("categories_level_1")[j].get("categories_level_2")[k]["name"]}')
+                        f'  Добавляем список с данными о товарах внутри категории {data[i].get("categories_level_1")[j].get("categories_level_2")[k]["name"]}')
                     data[i].get("categories_level_1")[j].get("categories_level_2")[k]['products'] = get_products_data(
                         category_url=url, path_to_download=path_to_download)
-                    print(
-                        f'Добавили в категорию {data[i].get("categories_level_1")[j].get("categories_level_2")[k]["name"]} товары в количестве {len(data[i].get("categories_level_1")[j].get("categories_level_2")[k]["products"])} шт\n')
             else:
-                url = main_url + data[i].get("categories_level_1")[j]['href']
+                url = main_url[:-8] + data[i].get("categories_level_1")[j]['href']
                 print(
-                    f'Добавляем список с данными о товарах внутри категории {data[i].get("categories_level_1")[j]["name"]}')
+                    f'  Добавляем список с данными о товарах внутри категории {data[i].get("categories_level_1")[j]["name"]}')
                 data[i].get("categories_level_1")[j]['products'] = get_products_data(category_url=url,
                                                                                      path_to_download=path_to_download)
-                print(
-                    f'Добавили в категорию {data[i].get("categories_level_1")[j]["name"]} товары в количестве {len(data[i].get("categories_level_1")[j]["products"])} шт\n')
     return data
 
 
 def get_products_data(category_url, path_to_download):
     """Возвращает список с данными о товарах внутри категории"""
+    s = time.time()
     response_pages_list = asyncio.run(get_response_pages(category_url=category_url))
-    print(f'    получили responces в количестве {len(response_pages_list)} шт')
+    print(f'     получили responces в количестве {len(response_pages_list)} шт')
 
     items_url_list = get_items_urls(response_pages_list)
-    print(f'    получили items_urls товаров в количестве {len(items_url_list)} шт')
+    print(f'     получили items_urls товаров в количестве {len(items_url_list)} шт')
 
     if len(items_url_list) > 0:
-        items_response_dict = asyncio.run(get_items_responses(items_url_list))
-        print(f'    получили response_items товаров в количестве {len(items_response_dict)} шт')
+        items_response_list = asyncio.run(get_items_responses(items_url_list))
+        print(f'     получили response_items товаров в количестве {len(items_response_list)} шт')
 
-        products_data_list = get_items_data(items_response_dict, path_to_download)
-        print(f'    получили products_data в количестве {len(products_data_list)} шт')
-
+        products_data_list = get_items_data(items_response_list, path_to_download)
+        print(f'     получили products_data в количестве {len(products_data_list)} шт, время выполнения {time.time()-s} сек')
+        print('')
+        print(products_data_list)
         return products_data_list
+    print('')
     return []
 
 #######################################################################################
@@ -103,7 +102,7 @@ async def get_response_page(url, session):
         return await response.text()
 
 
-async def get_response_pages(category_url):
+async def get_response_pages(category_url: str) -> list:
     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
     response_page_list = []
     response_page = requests.get(f'{category_url}')
@@ -114,12 +113,9 @@ async def get_response_pages(category_url):
         return response_page_list
     else:
         n = int(paggination_list[-2].text)
-        s = time.time()
-        async with aiohttp.ClientSession() as session:
+        async with ClientSession() as session:
             task_list = [asyncio.create_task(get_response_page(f'{category_url}page-{number_page}', session)) for number_page in range(2, n + 1)]
-            for future in asyncio.as_completed(task_list):
-                response_page_list.append(await future)
-        print(time.time()-s)
+            response_page_list += await asyncio.gather(*task_list)
         await asyncio.sleep(0.1)
     return response_page_list
 
@@ -149,22 +145,26 @@ def get_items_urls(response_page_list):
 
 #######################################################################################
 
-async def get_item_response(item_url, session):
+async def get_item_response(item_url, session) -> list:
     """Возвращает response обьект на product_detail"""
     async with session.get(item_url) as response:
-        return item_url, await response.text()
+        return [item_url, await response.text()]
 
 
-async def get_items_responses(items_url_list: list) -> dict:
+
+async def get_items_responses(items_url_list: list) -> list:
     """Возвращает список response обьектов на все товары внутри категории"""
-    items_response_dict = {}
-    async with aiohttp.ClientSession() as session:
-        task_list = [asyncio.create_task(get_item_response(item_url, session)) for item_url in items_url_list]
-        for future in asyncio.as_completed(task_list):
-            item_url, response = await future
-            items_response_dict[item_url] = response
+    try:
+        try:
+            async with ClientSession() as session:
+                task_list = [get_item_response(item_url, session) for item_url in items_url_list]
+                items_response_list = await asyncio.gather(*task_list)
+        except ClientError as e:
+            print(e)
+    except BaseException as ex:
+        print(ex)
     await asyncio.sleep(0.1)
-    return items_response_dict
+    return items_response_list
 
 #######################################################################################
 
@@ -177,16 +177,18 @@ def get_item_data(item_url, item_response, path_to_download) -> dict:
     item_data['price'] = get_price(item_html)
     item_data['properties'] = get_properties(item_html)
     item_data['photos'] = get_photos_urls(item_data['name'], item_html)
-    download_photos(item_data.get('photos'), path_to_download)
+    asyncio.run(download_photos(item_data.get('photos'), path_to_download))
     return item_data
 
 
-def get_items_data(items_response_dict: dict, path_to_download: str) -> list:
+def get_items_data(items_response_list: list, path_to_download: str) -> list:
     """Возврашает список данных о товарах и загружает их фотографии в path_to_download"""
     items_data = []
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        future_list = [executor.submit(get_item_data, item_url, item_response, path_to_download) for item_url, item_response in
-                       items_response_dict.items()]
+        future_list = [executor.submit(get_item_data,
+                                       item_url=l[0],
+                                       item_response=l[1],
+                                       path_to_download=path_to_download) for l in items_response_list]
         for future in concurrent.futures.as_completed(future_list):
             items_data.append(future.result())
     return items_data
@@ -263,20 +265,37 @@ def get_photos_urls(name: str, item_html) -> list:
     return photos_url_list
 
 
-def download_photos(photos_url_list, path):
+async def download_photos(photos_url_list, path):
     """Запускает потоки и загружает в них фотографии товара"""
     if photos_url_list:
-        for photo_url in photos_url_list:
-            threading.Thread(target=download_photo, args=(photo_url, path)).start()
+        async with ClientSession() as session:
+            task_list = [asyncio.create_task(get_photo(photo_url, session)) for photo_url in photos_url_list]
+            photo_list = await asyncio.gather(*task_list)
+        await asyncio.sleep(0.1)
+        for photo in photo_list:
+            root = path + photo[0].split('/')[-1]
+            threading.Thread(target=write_photo, args=(root, photo[1])).start()
 
-
-def download_photo(photo_url, path):
+async def get_photo(photo_url, session):
     """Загружает фотографию"""
-    root = path + photo_url.split('/')[-1]
-    p = requests.get(photo_url)
-    img = open(root, "wb")
-    img.write(p.content)
-    img.close()
+    async with session.get(photo_url) as response:
+        return [photo_url, await response.read()]
+
+def write_photo(root, photo):
+    """Записывает фотографию на диск"""
+    with open(root, "wb") as img:
+        img.write(photo)
+
+
+# def download_photo(photo_url, path):
+#     """Загружает фотографию"""
+#     root = path + photo_url.split('/')[-1]
+#     retries = Retry(connect=5, read=2, redirect=5)
+#     http = PoolManager(retries=retries)
+#     p = requests.get(photo_url)
+#     img = open(root, "wb")
+#     img.write(p.content)
+#     img.close()
 
 
 # async def download_photos(photos_url_list: list, path: str) -> None:
