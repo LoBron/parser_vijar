@@ -90,7 +90,6 @@ def get_products_data(category_url, path_to_download):
         products_data_list = get_items_data(items_response_list, path_to_download)
         print(f'     получили products_data в количестве {len(products_data_list)} шт, время выполнения {time.time()-s} сек')
         print('')
-        print(products_data_list)
         return products_data_list
     print('')
     return []
