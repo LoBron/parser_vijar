@@ -15,7 +15,7 @@ def get_categories_info(main_url):
     html_page = BS(response_obj.content, 'html.parser')
     items0_list = html_page.select('.main-menu > .top_level > li')
 
-    for item0 in items0_list[:]:  # items0_list: #####################
+    for item0 in items0_list[1:2]:  # items0_list: #####################
         cat0_name = item0.find_all('span')[0].text.strip()
         if cat0_name in ['Фасады', 'Фасади']:
             continue
@@ -115,7 +115,7 @@ async def get_response_pages(category_url: str) -> list:
         async with ClientSession() as session:
             task_list = [asyncio.create_task(get_response_page(f'{category_url}page-{number_page}', session)) for number_page in range(2, n + 1)]
             response_page_list += await asyncio.gather(*task_list)
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.9)
     return response_page_list
 
 #######################################################################################
@@ -162,7 +162,7 @@ async def get_items_responses(items_url_list: list) -> list:
             print(e)
     except BaseException as ex:
         print(ex)
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(0.9)
     return items_response_list
 
 #######################################################################################
@@ -270,7 +270,7 @@ async def download_photos(photos_url_list, path):
         async with ClientSession() as session:
             task_list = [asyncio.create_task(get_photo(photo_url, session)) for photo_url in photos_url_list]
             photo_list = await asyncio.gather(*task_list)
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.9)
         for photo in photo_list:
             root = path + photo[0].split('/')[-1]
             threading.Thread(target=write_photo, args=(root, photo[1])).start()
