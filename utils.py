@@ -77,14 +77,14 @@ def add_products_data(data, main_url, path_to_download):
 def get_products_data(category_url, path_to_download):
     """Возвращает список с данными о товарах внутри категории"""
     s = time.time()
-    response_pages_list = asyncio.run(get_response_pages(category_url=category_url))
+    response_pages_list = asyncio.get_event_loop().run_until_complete(get_response_pages(category_url=category_url))
     print(f'     получили responces в количестве {len(response_pages_list)} шт')
 
     items_url_list = get_items_urls(response_pages_list)
     print(f'     получили items_urls товаров в количестве {len(items_url_list)} шт')
 
     if len(items_url_list) > 0:
-        items_response_list = asyncio.run(get_items_responses(items_url_list))
+        items_response_list = asyncio.get_event_loop().run_until_complete(get_items_responses(items_url_list))
         print(f'     получили response_items товаров в количестве {len(items_response_list)} шт')
 
         products_data_list = get_items_data(items_response_list, path_to_download)
@@ -115,7 +115,6 @@ async def get_response_pages(category_url: str) -> list:
         async with ClientSession() as session:
             task_list = [asyncio.create_task(get_response_page(f'{category_url}page-{number_page}', session)) for number_page in range(2, n + 1)]
             response_page_list += await asyncio.gather(*task_list)
-        await asyncio.sleep(0.9)
     return response_page_list
 
 #######################################################################################
@@ -162,7 +161,6 @@ async def get_items_responses(items_url_list: list) -> list:
             print(e)
     except BaseException as ex:
         print(ex)
-    await asyncio.sleep(0.9)
     return items_response_list
 
 #######################################################################################
@@ -176,7 +174,7 @@ def get_item_data(item_url, item_response, path_to_download) -> dict:
     item_data['price'] = get_price(item_html)
     item_data['properties'] = get_properties(item_html)
     item_data['photos'] = get_photos_urls(item_data['name'], item_html)
-    asyncio.run(download_photos(item_data.get('photos'), path_to_download))
+    asyncio.get_event_loop().run_until_complete(download_photos(item_data.get('photos'), path_to_download))
     return item_data
 
 
@@ -270,7 +268,6 @@ async def download_photos(photos_url_list, path):
         async with ClientSession() as session:
             task_list = [asyncio.create_task(get_photo(photo_url, session)) for photo_url in photos_url_list]
             photo_list = await asyncio.gather(*task_list)
-        await asyncio.sleep(0.9)
         for photo in photo_list:
             root = path + photo[0].split('/')[-1]
             threading.Thread(target=write_photo, args=(root, photo[1])).start()
