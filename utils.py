@@ -3,6 +3,8 @@ import threading
 import asyncio
 import time
 import concurrent.futures
+from typing import List, Dict, Any, Coroutine
+
 import requests
 from aiohttp import ClientSession, ClientError
 from bs4 import BeautifulSoup as BS
@@ -74,7 +76,7 @@ def add_products_data(data, main_url, path_to_download):
     return data
 
 
-def get_products_data(category_url, path_to_download):
+def get_products_data(category_url: str, path_to_download: str) -> List[dict]:
     """Возвращает список с данными о товарах внутри категории"""
     s = time.time()
     response_pages_list = asyncio.get_event_loop().run_until_complete(get_response_pages(category_url=category_url))
@@ -96,12 +98,12 @@ def get_products_data(category_url, path_to_download):
 
 #######################################################################################
 
-async def get_response_page(url, session):
+async def get_response_page(url: str, session: BS) -> Any:
     async with session.get(url) as response:
         return await response.text()
 
 
-async def get_response_pages(category_url: str) -> list:
+async def get_response_pages(category_url: str) -> Any:
     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
     response_page_list = []
     response_page = requests.get(f'{category_url}')
@@ -119,7 +121,8 @@ async def get_response_pages(category_url: str) -> list:
 
 #######################################################################################
 
-def get_urls(response_page):
+
+def get_urls(response_page: str) -> List[str]:
     url_list = []
     html = BS(response_page, 'html.parser')
     items = html.select('.product_prewiew')
@@ -131,7 +134,7 @@ def get_urls(response_page):
     return url_list
 
 
-def get_items_urls(response_page_list):
+def get_items_urls(response_page_list: List[str]) -> List[str]:
     """Возвращает список URL адресов всех товаров внутри категории"""
     items_url_list = []
     if len(response_page_list) > 0:
@@ -143,14 +146,15 @@ def get_items_urls(response_page_list):
 
 #######################################################################################
 
-async def get_item_response(item_url, session) -> list:
+
+async def get_item_response(item_url: str, session: ClientSession) -> List[str, Coroutine[str]]:
     """Возвращает response обьект на product_detail"""
     async with session.get(item_url) as response:
         return [item_url, await response.text()]
 
 
 
-async def get_items_responses(items_url_list: list) -> list:
+async def get_items_responses(items_url_list: list) -> Any:
     """Возвращает список response обьектов на все товары внутри категории"""
     try:
         try:
@@ -165,7 +169,7 @@ async def get_items_responses(items_url_list: list) -> list:
 
 #######################################################################################
 
-def get_item_data(item_url, item_response, path_to_download) -> dict:
+def get_item_data(item_url: str, item_response, path_to_download: str) -> Dict[str: Any]:
     """Возвращает данные о товаре и загружает его фотографии в path_to_download"""
     item_data = {}
     item_html = BS(item_response, 'html.parser')
@@ -178,7 +182,7 @@ def get_item_data(item_url, item_response, path_to_download) -> dict:
     return item_data
 
 
-def get_items_data(items_response_list: list, path_to_download: str) -> list:
+def get_items_data(items_response_list: list, path_to_download: str) -> List[dict]:
     """Возврашает список данных о товарах и загружает их фотографии в path_to_download"""
     items_data = []
     with concurrent.futures.ProcessPoolExecutor() as executor:
@@ -192,7 +196,8 @@ def get_items_data(items_response_list: list, path_to_download: str) -> list:
 
 #######################################################################################
 
-def get_name(item_html):
+
+def get_name(item_html: BS) -> str:
     """Возвращает наименование товара"""
     try:
         name = item_html.select('.product_name > h1 > b')[0].text.strip()
@@ -211,7 +216,7 @@ def get_slug(item_url: str) -> str:
         return slug
 
 
-def get_price(item_html):
+def get_price(item_html: BS) -> float:
     """Возвращает стоимость товара за единицу"""
     try:
         try:
@@ -223,12 +228,12 @@ def get_price(item_html):
                 price += i
             price = float(price)
     except Exception:
-        return random.choice(range(1700, 2500, 3))
+        return float(random.choice(range(1700, 2500, 3)))
     else:
         return price
 
 
-def get_properties(item_html):
+def get_properties(item_html: BS) -> Dict[str: str]:
     """Возвращает характеристики товара"""
     properties = {}
     prop_list = item_html.select('div.charakters > ul.properties > li')
@@ -246,7 +251,7 @@ def get_properties(item_html):
     return properties
 
 
-def get_photos_urls(name: str, item_html) -> list:
+def get_photos_urls(name: str, item_html: BS) -> List[str]:
     """Возвращает список url адресов фотографий товара"""
     photos_url_list = []
     for n in range(1, 5):
@@ -262,7 +267,7 @@ def get_photos_urls(name: str, item_html) -> list:
     return photos_url_list
 
 
-async def download_photos(photos_url_list, path):
+async def download_photos(photos_url_list: List[str], path: str) -> None:
     """Запускает потоки и загружает в них фотографии товара"""
     if photos_url_list:
         async with ClientSession() as session:
@@ -272,12 +277,14 @@ async def download_photos(photos_url_list, path):
             root = path + photo[0].split('/')[-1]
             threading.Thread(target=write_photo, args=(root, photo[1])).start()
 
-async def get_photo(photo_url, session):
+
+async def get_photo(photo_url: str, session: ClientSession) -> List[str, Coroutine[bytes]]:
     """Загружает фотографию"""
     async with session.get(photo_url) as response:
         return [photo_url, await response.read()]
 
-def write_photo(root, photo):
+
+def write_photo(root: str, photo: bytes) -> None:
     """Записывает фотографию на диск"""
     with open(root, "wb") as img:
         img.write(photo)
