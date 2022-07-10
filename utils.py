@@ -1,19 +1,28 @@
-import random
-import threading
-import asyncio
-import time
-import concurrent.futures
-from typing import List, Dict, Any, Coroutine
+from __future__ import print_function
+from asyncio import get_event_loop, create_task, gather
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from random import choice
+from time import time
+from typing import List, Dict, Any, Union
+from os.path import exists
+from io import BytesIO
+from requests import get
 
-import requests
 from aiohttp import ClientSession, ClientError
 from bs4 import BeautifulSoup as BS
 
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaIoBaseUpload
 
-def get_categories_info(main_url):
+
+def get_categories_info(main_url: str) -> List[dict]:
     """Возвращает список с данными(словарями) о категориях"""
     categories_info = []
-    response_obj = requests.get(main_url)
+    response_obj = get(main_url)
     html_page = BS(response_obj.content, 'html.parser')
     items0_list = html_page.select('.main-menu > .top_level > li')
 
@@ -55,7 +64,7 @@ def get_categories_info(main_url):
     return categories_info
 
 
-def add_products_data(data, main_url, path_to_download):
+def add_products_data(data: List[dict], main_url: str, path_to_download: str) -> List[dict]:
     """Добавляет к данным о категоряих данные об их товарах и возвращает полученный список с категориями"""
     for i in range(len(data)):  # range(len(data)):
         print(f'Добавляем данные в раздел {data[i]["name"]}\n')
@@ -66,7 +75,8 @@ def add_products_data(data, main_url, path_to_download):
                     print(
                         f'  Добавляем список с данными о товарах внутри категории {data[i].get("categories_level_1")[j].get("categories_level_2")[k]["name"]}')
                     data[i].get("categories_level_1")[j].get("categories_level_2")[k]['products'] = get_products_data(
-                        category_url=url, path_to_download=path_to_download)
+                        category_url=url,
+                        path_to_download=path_to_download)
             else:
                 url = main_url[:-8] + data[i].get("categories_level_1")[j]['href']
                 print(
@@ -78,35 +88,37 @@ def add_products_data(data, main_url, path_to_download):
 
 def get_products_data(category_url: str, path_to_download: str) -> List[dict]:
     """Возвращает список с данными о товарах внутри категории"""
-    s = time.time()
-    response_pages_list = asyncio.get_event_loop().run_until_complete(get_response_pages(category_url=category_url))
+    s = time()
+    response_pages_list = get_event_loop().run_until_complete(get_response_pages(category_url=category_url))
     print(f'     получили responces в количестве {len(response_pages_list)} шт')
 
     items_url_list = get_items_urls(response_pages_list)
     print(f'     получили items_urls товаров в количестве {len(items_url_list)} шт')
 
     if len(items_url_list) > 0:
-        items_response_list = asyncio.get_event_loop().run_until_complete(get_items_responses(items_url_list))
+        items_response_list = get_event_loop().run_until_complete(get_items_responses(items_url_list))
         print(f'     получили response_items товаров в количестве {len(items_response_list)} шт')
 
         products_data_list = get_items_data(items_response_list, path_to_download)
-        print(f'     получили products_data в количестве {len(products_data_list)} шт, время выполнения {time.time()-s} сек')
+        print(
+            f'     получили products_data в количестве {len(products_data_list)} шт, время выполнения {time() - s} сек')
         print('')
         return products_data_list
     print('')
     return []
 
+
 #######################################################################################
 
-async def get_response_page(url: str, session: BS) -> Any:
+async def get_response_page(url: str, session: BS):
     async with session.get(url) as response:
         return await response.text()
 
 
-async def get_response_pages(category_url: str) -> Any:
+async def get_response_pages(category_url: str):
     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
     response_page_list = []
-    response_page = requests.get(f'{category_url}')
+    response_page = get(f'{category_url}')
     response_page_list.append(response_page.text)
     item_html = BS(response_page_list[0], 'html.parser')
     paggination_list = item_html.select('.paggination > li')
@@ -115,9 +127,11 @@ async def get_response_pages(category_url: str) -> Any:
     else:
         n = int(paggination_list[-2].text)
         async with ClientSession() as session:
-            task_list = [asyncio.create_task(get_response_page(f'{category_url}page-{number_page}', session)) for number_page in range(2, n + 1)]
-            response_page_list += await asyncio.gather(*task_list)
+            task_list = [create_task(get_response_page(f'{category_url}page-{number_page}', session)) for number_page in
+                         range(2, n + 1)]
+            response_page_list += await gather(*task_list)
     return response_page_list
+
 
 #######################################################################################
 
@@ -138,38 +152,63 @@ def get_items_urls(response_page_list: List[str]) -> List[str]:
     """Возвращает список URL адресов всех товаров внутри категории"""
     items_url_list = []
     if len(response_page_list) > 0:
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor() as executor:
             future_list = [executor.submit(get_urls, response_page) for response_page in response_page_list]
-            for future in concurrent.futures.as_completed(future_list):
+            for future in as_completed(future_list):
                 items_url_list += future.result()
     return items_url_list
+
 
 #######################################################################################
 
 
-async def get_item_response(item_url: str, session: ClientSession) -> List[str, Coroutine[str]]:
+async def get_item_response(item_url: str, session: ClientSession):
     """Возвращает response обьект на product_detail"""
     async with session.get(item_url) as response:
         return [item_url, await response.text()]
 
 
-
-async def get_items_responses(items_url_list: list) -> Any:
+async def get_items_responses(items_url_list: list):
     """Возвращает список response обьектов на все товары внутри категории"""
     try:
         try:
             async with ClientSession() as session:
                 task_list = [get_item_response(item_url, session) for item_url in items_url_list]
-                items_response_list = await asyncio.gather(*task_list)
+                items_response_list = await gather(*task_list)
         except ClientError as e:
             print(e)
     except BaseException as ex:
         print(ex)
     return items_response_list
 
-#######################################################################################
 
-def get_item_data(item_url: str, item_response, path_to_download: str) -> Dict[str: Any]:
+#######################################################################################
+def google_auth():
+    """Shows basic usage of the Drive v3 API.
+      Prints the names and ids of the first 10 files the user has access to.
+      """
+    creds = None
+    SCOPES = ['https://www.googleapis.com/auth/drive']
+    # The file token.json stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first
+    # time.
+    if exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'credentials.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+        # Save the credentials for the next run
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
+    return creds
+
+
+def get_item_data(item_url: str, item_response: str, google_credentials: Credentials) -> Dict[str, Any]:
     """Возвращает данные о товаре и загружает его фотографии в path_to_download"""
     item_data = {}
     item_html = BS(item_response, 'html.parser')
@@ -177,22 +216,25 @@ def get_item_data(item_url: str, item_response, path_to_download: str) -> Dict[s
     item_data['slug'] = get_slug(item_url)
     item_data['price'] = get_price(item_html)
     item_data['properties'] = get_properties(item_html)
-    item_data['photos'] = get_photos_urls(item_data['name'], item_html)
-    asyncio.get_event_loop().run_until_complete(download_photos(item_data.get('photos'), path_to_download))
+    photos_url_list = get_photos_urls(item_data['name'], item_html)
+    item_data['photos'] = get_event_loop().run_until_complete(download_photos(photos_url_list, google_credentials))
     return item_data
 
 
-def get_items_data(items_response_list: list, path_to_download: str) -> List[dict]:
+def get_items_data(items_response_list: list) -> List[dict]:
     """Возврашает список данных о товарах и загружает их фотографии в path_to_download"""
     items_data = []
-    with concurrent.futures.ProcessPoolExecutor() as executor:
+    google_credentials = google_auth()
+
+    with ProcessPoolExecutor() as executor:
         future_list = [executor.submit(get_item_data,
-                                       item_url=l[0],
-                                       item_response=l[1],
-                                       path_to_download=path_to_download) for l in items_response_list]
-        for future in concurrent.futures.as_completed(future_list):
+                                       item_url=item[0],
+                                       item_response=item[1],
+                                       creds=google_credentials) for item in items_response_list]
+        for future in as_completed(future_list):
             items_data.append(future.result())
     return items_data
+
 
 #######################################################################################
 
@@ -202,7 +244,7 @@ def get_name(item_html: BS) -> str:
     try:
         name = item_html.select('.product_name > h1 > b')[0].text.strip()
     except Exception:
-        return f'Exeption {int(time.time() * 1000)}'
+        return f'Exeption {int(time() * 1000)}'
     else:
         return name
 
@@ -211,7 +253,7 @@ def get_slug(item_url: str) -> str:
     try:
         slug = item_url.split('/')[-1]
     except Exception:
-        return f'exeption_{int(time.time() * 1000)}'
+        return f'exeption_{int(time() * 1000)}'
     else:
         return slug
 
@@ -228,12 +270,12 @@ def get_price(item_html: BS) -> float:
                 price += i
             price = float(price)
     except Exception:
-        return float(random.choice(range(1700, 2500, 3)))
+        return float(choice(range(1700, 2500, 3)))
     else:
         return price
 
 
-def get_properties(item_html: BS) -> Dict[str: str]:
+def get_properties(item_html: BS) -> Dict[str, str]:
     """Возвращает характеристики товара"""
     properties = {}
     prop_list = item_html.select('div.charakters > ul.properties > li')
@@ -267,27 +309,70 @@ def get_photos_urls(name: str, item_html: BS) -> List[str]:
     return photos_url_list
 
 
-async def download_photos(photos_url_list: List[str], path: str) -> None:
+async def download_photos(photos_url_list: List[str], google_credentials: Credentials) -> List[Union[str, None]]:
     """Запускает потоки и загружает в них фотографии товара"""
+    photo_id_list = []
     if photos_url_list:
         async with ClientSession() as session:
-            task_list = [asyncio.create_task(get_photo(photo_url, session)) for photo_url in photos_url_list]
-            photo_list = await asyncio.gather(*task_list)
-        for photo in photo_list:
-            root = path + photo[0].split('/')[-1]
-            threading.Thread(target=write_photo, args=(root, photo[1])).start()
+            task_list = [create_task(get_photo(photo_url, session)) for photo_url in photos_url_list]
+            photo_list = await gather(*task_list)
+
+        user_permission = {'type': 'anyone', 'value': 'anyone', 'role': 'reader'}
+        with ThreadPoolExecutor() as executor:
+            future_list = [executor.submit(google_upload_image,
+                                           image=BytesIO(photo.get('photo')),
+                                           google_credentials=google_credentials,
+                                           file_metadata={'name': photo.get('name')},
+                                           user_permission=user_permission
+                                           ) for photo in photo_list]
+            for future in as_completed(future_list):
+                photo_id_list.append(future.result())
+
+    return photo_id_list
 
 
-async def get_photo(photo_url: str, session: ClientSession) -> List[str, Coroutine[bytes]]:
+async def get_photo(photo_url: str, session: ClientSession):
     """Загружает фотографию"""
     async with session.get(photo_url) as response:
-        return [photo_url, await response.read()]
+        return {"name": photo_url.split('/')[-1], "photo": await response.read()}
 
 
-def write_photo(root: str, photo: bytes) -> None:
-    """Записывает фотографию на диск"""
-    with open(root, "wb") as img:
-        img.write(photo)
+def google_upload_image(image: BytesIO,
+                        google_credentials: Credentials,
+                        file_metadata: Dict[str, str],
+                        user_permission: Dict[str, str]) -> str:
+    try:
+        # create gmail api client
+        service = build('drive', 'v3', credentials=google_credentials)
+        media = MediaIoBaseUpload(image, mimetype='image/jpg')
+        file = service.files().create(body=file_metadata, media_body=media).execute()
+        fileId = file.get("id")
+        service.permissions().create(fileId=fileId, body=user_permission).execute()
+        return fileId
+
+    except HttpError as error:
+        print(F'An error occurred: {error}')
+        return None
+
+
+if __name__ == '__main__':
+    url = 'https://viyar.ua/catalog/neon_lenta_smd_2835_9_6vt_12v_ip20_4kh10_mm_kholodnyy_svet'
+    resp = get(url).text
+    google_credentials = google_auth()
+    result = get_item_data(item_url=url, item_response=resp, google_credentials=google_credentials)
+    # print(get_event_loop().run_until_complete(download_photos(
+    #     photos_url_list=["https://viyar.ua/upload/resize_cache/photos/300_300_1/ph97262.jpg",
+    #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph66441.jpg',
+    #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph84038.jpg',
+    #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph90731.jpg'],
+    #     google_credentials=google_auth()
+    # )))
+    print(result)
+
+# def write_photo(root: str, photo: bytes) -> None:
+#     """Записывает фотографию на диск"""
+#     with open(root, "wb") as img:
+#         img.write(photo)
 
 
 # def download_photo(photo_url, path):
@@ -326,6 +411,3 @@ def write_photo(root: str, photo: bytes) -> None:
 #         print('здарова ёпта')
 #         time.sleep(5)
 #         await img.write(photo)
-
-
-
