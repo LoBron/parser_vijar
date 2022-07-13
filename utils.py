@@ -3,7 +3,7 @@ from asyncio import get_event_loop, create_task, gather
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from random import choice
 from time import time
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Tuple, Any, Optional, Union
 from os.path import exists
 from io import BytesIO
 from requests import get
@@ -18,6 +18,28 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload
 
+from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.orm import sessionmaker, Session
+
+from .models import Cat
+
+# DATABASE_URL = 'postgresql+asyncpg://postgres:1@localhost:5432/test'
+DATABASE_URL = 'postgresql+psycopg2://postgres:1@localhost:5432/test'
+engine = create_engine(DATABASE_URL, echo=True)
+session = Session(bind=engine)
+# session = sessionmaker(bind=engine)
+
+
+async def add_cat_to_database(cat_data: dict, parent_id: Union[int, None] = None):
+    cat = Cat(
+        name=cat_data.get('name'),
+        slug=cat_data.get('slug'),
+        parent_id=parent_id
+    )
+    session.add(cat)
+    session.commit()
+
 
 def get_categories_info(main_url: str) -> List[dict]:
     """Возвращает список с данными(словарями) о категориях"""
@@ -31,10 +53,10 @@ def get_categories_info(main_url: str) -> List[dict]:
         if cat0_name in ['Фасады', 'Фасади']:
             continue
         else:
-            cat_level_0 = {}
-            cat_level_0["name"] = cat0_name
-            cat_level_0["slug"] = 'надо доработать'
-            cat_level_0["categories_level_1"] = []
+            cats_0 = {}
+            cats_0["name"] = cat0_name
+            cats_0["slug"] = 'надо доработать'
+            cats_0["cats_1"] = []
 
             items1_list = item0.select('.hidden-label > div')
             for item1 in items1_list[:]:  # items1_list: #####################
@@ -44,27 +66,27 @@ def get_categories_info(main_url: str) -> List[dict]:
                     if cat1_name in ['Мойки из искусственного камня  Belterno', 'Мийки зі штучного каменю  Belterno']:
                         continue
                     else:
-                        cat_level_1 = {}
-                        cat_level_1["name"] = cat1_name
+                        cats_1 = {}
+                        cats_1["name"] = cat1_name
                         href_list_1 = links[0]["href"].split("/")
-                        cat_level_1["href"] = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
-                        cat_level_1["slug"] = cat_level_1["href"].split('/')[-2]
-                        cat_level_1["categories_level_2"] = []
+                        cats_1["href"] = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
+                        cats_1["slug"] = cats_1["href"].split('/')[-2]
+                        cats_1["cats_2"] = []
                         if len(links) > 1:
                             for n in range(1, len(links)):  # range(1, len(links)):  #####################
-                                cat_level_2 = {}
-                                cat_level_2["name"] = links[n].text.strip()
+                                cats_2 = {}
+                                cats_2["name"] = links[n].text.strip()
                                 href_list_2 = links[n]["href"].split("/")
-                                cat_level_2["href"] = f'/{href_list_2[-3]}/{href_list_2[-2]}/'
-                                cat_level_2["slug"] = cat_level_2["href"].split('/')[-2]
-                                cat_level_1["categories_level_2"].append(cat_level_2)
-                        cat_level_0["categories_level_1"].append(cat_level_1)
-            categories_info.append(cat_level_0)
+                                cats_2["href"] = f'/{href_list_2[-3]}/{href_list_2[-2]}/'
+                                cats_2["slug"] = cats_2["href"].split('/')[-2]
+                                cats_1["cats_2"].append(cats_2)
+                        cats_0["cats_1"].append(cats_1)
+            categories_info.append(cats_0)
     print('Cписок с данными о разделах создан\n')
     return categories_info
 
 
-def add_products_data(data: List[dict], main_url: str, path_to_download: str) -> List[dict]:
+def add_products_data(data: List[dict], main_url: str) -> List[dict]:
     """Добавляет к данным о категоряих данные об их товарах и возвращает полученный список с категориями"""
     for i in range(len(data)):  # range(len(data)):
         print(f'Добавляем данные в раздел {data[i]["name"]}\n')
@@ -72,21 +94,19 @@ def add_products_data(data: List[dict], main_url: str, path_to_download: str) ->
             if len(data[i].get("categories_level_1")[j].get("categories_level_2")) > 0:
                 for k in range(len(data[i].get("categories_level_1")[j].get("categories_level_2"))):
                     url = main_url[:-8] + data[i].get("categories_level_1")[j].get("categories_level_2")[k]['href']
-                    print(
-                        f'  Добавляем список с данными о товарах внутри категории {data[i].get("categories_level_1")[j].get("categories_level_2")[k]["name"]}')
+                    print(f'  Добавляем список с данными о товарах \
+                    внутри категории {data[i].get("categories_level_1")[j].get("categories_level_2")[k]["name"]}')
                     data[i].get("categories_level_1")[j].get("categories_level_2")[k]['products'] = get_products_data(
-                        category_url=url,
-                        path_to_download=path_to_download)
+                        category_url=url)
             else:
                 url = main_url[:-8] + data[i].get("categories_level_1")[j]['href']
-                print(
-                    f'  Добавляем список с данными о товарах внутри категории {data[i].get("categories_level_1")[j]["name"]}')
-                data[i].get("categories_level_1")[j]['products'] = get_products_data(category_url=url,
-                                                                                     path_to_download=path_to_download)
+                print(f'  Добавляем список с данными о товарах \
+                внутри категории {data[i].get("categories_level_1")[j]["name"]}')
+                data[i].get("categories_level_1")[j]['products'] = get_products_data(category_url=url)
     return data
 
 
-def get_products_data(category_url: str, path_to_download: str) -> List[dict]:
+def get_products_data(category_url: str) -> List[dict]:
     """Возвращает список с данными о товарах внутри категории"""
     s = time()
     response_pages_list = get_event_loop().run_until_complete(get_response_pages(category_url=category_url))
@@ -99,9 +119,9 @@ def get_products_data(category_url: str, path_to_download: str) -> List[dict]:
         items_response_list = get_event_loop().run_until_complete(get_items_responses(items_url_list))
         print(f'     получили response_items товаров в количестве {len(items_response_list)} шт')
 
-        products_data_list = get_items_data(items_response_list, path_to_download)
-        print(
-            f'     получили products_data в количестве {len(products_data_list)} шт, время выполнения {time() - s} сек')
+        products_data_list = get_items_data(items_response_list)
+        print(f'     получили products_data \
+        в количестве {len(products_data_list)} шт, время выполнения {time() - s} сек')
         print('')
         return products_data_list
     print('')
@@ -110,7 +130,7 @@ def get_products_data(category_url: str, path_to_download: str) -> List[dict]:
 
 #######################################################################################
 
-async def get_response_page(url: str, session: BS):
+async def get_response_page(url: str, session: ClientSession):
     async with session.get(url) as response:
         return await response.text()
 
@@ -127,8 +147,8 @@ async def get_response_pages(category_url: str):
     else:
         n = int(paggination_list[-2].text)
         async with ClientSession() as session:
-            task_list = [create_task(get_response_page(f'{category_url}page-{number_page}', session)) for number_page in
-                         range(2, n + 1)]
+            task_list = [create_task(get_response_page(f'{category_url}page-{number_page}',
+                                                       session)) for number_page in range(2, n + 1)]
             response_page_list += await gather(*task_list)
     return response_page_list
 
@@ -216,8 +236,8 @@ def get_item_data(item_url: str, item_response: str, google_credentials: Credent
     item_data['slug'] = get_slug(item_url)
     item_data['price'] = get_price(item_html)
     item_data['properties'] = get_properties(item_html)
-    photos_url_list = get_photos_urls(item_data['name'], item_html)
-    item_data['photos'] = get_event_loop().run_until_complete(download_photos(photos_url_list, google_credentials))
+    photos_url_dict = get_photos_urls(item_data['name'], item_html)
+    item_data['photos'] = get_event_loop().run_until_complete(download_photos(photos_url_dict, google_credentials))
     return item_data
 
 
@@ -293,9 +313,9 @@ def get_properties(item_html: BS) -> Dict[str, str]:
     return properties
 
 
-def get_photos_urls(name: str, item_html: BS) -> List[str]:
+def get_photos_urls(name: str, item_html: BS) -> Dict[str, str]:
     """Возвращает список url адресов фотографий товара"""
-    photos_url_list = []
+    photos_url_dict = {}
     for n in range(1, 5):
         try:
             if n == 1:
@@ -303,44 +323,48 @@ def get_photos_urls(name: str, item_html: BS) -> List[str]:
             else:
                 photo = item_html.find_all('img', alt=name + ' — фото' + str(n))
             photo_url = f"https://viyar.ua{photo[0].get('src')}"
-            photos_url_list.append(photo_url)
+            photos_url_dict[f'photo{n}'] = photo_url
         except IndexError:
             break
-    return photos_url_list
+    return photos_url_dict
 
 
-async def download_photos(photos_url_list: List[str], google_credentials: Credentials) -> List[Union[str, None]]:
+async def download_photos(photos_url_dict: Dict[str, str], google_credentials: Credentials) -> Dict[str, str]:
     """Запускает потоки и загружает в них фотографии товара"""
-    photo_id_list = []
-    if photos_url_list:
+    photos_id_dict = {}
+    if photos_url_dict:
         async with ClientSession() as session:
-            task_list = [create_task(get_photo(photo_url, session)) for photo_url in photos_url_list]
+            task_list = [create_task(get_photo(key, url, session)) for key, url in photos_url_dict.items()]
             photo_list = await gather(*task_list)
 
         user_permission = {'type': 'anyone', 'value': 'anyone', 'role': 'reader'}
         with ThreadPoolExecutor() as executor:
             future_list = [executor.submit(google_upload_image,
+                                           key=photo.get('key'),
                                            image=BytesIO(photo.get('photo')),
                                            google_credentials=google_credentials,
                                            file_metadata={'name': photo.get('name')},
                                            user_permission=user_permission
                                            ) for photo in photo_list]
             for future in as_completed(future_list):
-                photo_id_list.append(future.result())
+                result = future.result()
+                if result:
+                    photos_id_dict[result[0]] = result[1]
 
-    return photo_id_list
+    return photos_id_dict
 
 
-async def get_photo(photo_url: str, session: ClientSession):
+async def get_photo(key: str, url: str, session: ClientSession):
     """Загружает фотографию"""
-    async with session.get(photo_url) as response:
-        return {"name": photo_url.split('/')[-1], "photo": await response.read()}
+    async with session.get(url) as response:
+        return {'key': key, "name": url.split('/')[-1], "photo": await response.read()}
 
 
-def google_upload_image(image: BytesIO,
+def google_upload_image(key: str,
+                        image: BytesIO,
                         google_credentials: Credentials,
                         file_metadata: Dict[str, str],
-                        user_permission: Dict[str, str]) -> str:
+                        user_permission: Dict[str, str]) -> Optional[Tuple[str, Any]]:
     try:
         # create gmail api client
         service = build('drive', 'v3', credentials=google_credentials)
@@ -348,7 +372,7 @@ def google_upload_image(image: BytesIO,
         file = service.files().create(body=file_metadata, media_body=media).execute()
         fileId = file.get("id")
         service.permissions().create(fileId=fileId, body=user_permission).execute()
-        return fileId
+        return key, fileId
 
     except HttpError as error:
         print(F'An error occurred: {error}')
