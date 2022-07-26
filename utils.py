@@ -22,23 +22,26 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker, Session
 
-from .models import Cat
+from my_sqlalchemy_mptt import mptt_sessionmaker
+from models import Cat
 
 # DATABASE_URL = 'postgresql+asyncpg://postgres:1@localhost:5432/test'
 DATABASE_URL = 'postgresql+psycopg2://postgres:1@localhost:5432/test'
 engine = create_engine(DATABASE_URL, echo=True)
-session = Session(bind=engine)
+Session = mptt_sessionmaker(sessionmaker(bind=engine))
+
 # session = sessionmaker(bind=engine)
 
 
-async def add_cat_to_database(cat_data: dict, parent_id: Union[int, None] = None):
-    cat = Cat(
-        name=cat_data.get('name'),
-        slug=cat_data.get('slug'),
-        parent_id=parent_id
-    )
+def add_cat_to_database(cat_data: dict, parent_id: Union[int, None] = None):
+    session = Session()
+    cat = Cat()
+    cat.name = cat_data.get('name')
+    cat.slug = cat_data.get('slug')
+    cat.parent_id = parent_id
     session.add(cat)
     session.commit()
+    return cat.id
 
 
 def get_categories_info(main_url: str) -> List[dict]:
@@ -47,8 +50,9 @@ def get_categories_info(main_url: str) -> List[dict]:
     response_obj = get(main_url)
     html_page = BS(response_obj.content, 'html.parser')
     items0_list = html_page.select('.main-menu > .top_level > li')
+    print(items0_list)
 
-    for item0 in items0_list[1:2]:  # items0_list: #####################
+    for item0 in items0_list[:]:  # items0_list: #####################
         cat0_name = item0.find_all('span')[0].text.strip()
         if cat0_name in ['Фасады', 'Фасади']:
             continue
@@ -57,6 +61,9 @@ def get_categories_info(main_url: str) -> List[dict]:
             cats_0["name"] = cat0_name
             cats_0["slug"] = 'надо доработать'
             cats_0["cats_1"] = []
+            print(cats_0)
+            parent_id_0 = add_cat_to_database(cats_0)
+            print(parent_id_0)
 
             items1_list = item0.select('.hidden-label > div')
             for item1 in items1_list[:]:  # items1_list: #####################
@@ -72,6 +79,8 @@ def get_categories_info(main_url: str) -> List[dict]:
                         cats_1["href"] = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
                         cats_1["slug"] = cats_1["href"].split('/')[-2]
                         cats_1["cats_2"] = []
+                        parent_id_1 = add_cat_to_database(cats_1, parent_id_0)
+                        print(parent_id_1)
                         if len(links) > 1:
                             for n in range(1, len(links)):  # range(1, len(links)):  #####################
                                 cats_2 = {}
@@ -79,6 +88,9 @@ def get_categories_info(main_url: str) -> List[dict]:
                                 href_list_2 = links[n]["href"].split("/")
                                 cats_2["href"] = f'/{href_list_2[-3]}/{href_list_2[-2]}/'
                                 cats_2["slug"] = cats_2["href"].split('/')[-2]
+                                parent_id_2 = add_cat_to_database(cats_2, parent_id_1)
+                                print(parent_id_2)
+
                                 cats_1["cats_2"].append(cats_2)
                         cats_0["cats_1"].append(cats_1)
             categories_info.append(cats_0)
@@ -380,18 +392,20 @@ def google_upload_image(key: str,
 
 
 if __name__ == '__main__':
-    url = 'https://viyar.ua/catalog/neon_lenta_smd_2835_9_6vt_12v_ip20_4kh10_mm_kholodnyy_svet'
-    resp = get(url).text
-    google_credentials = google_auth()
-    result = get_item_data(item_url=url, item_response=resp, google_credentials=google_credentials)
-    # print(get_event_loop().run_until_complete(download_photos(
-    #     photos_url_list=["https://viyar.ua/upload/resize_cache/photos/300_300_1/ph97262.jpg",
-    #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph66441.jpg',
-    #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph84038.jpg',
-    #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph90731.jpg'],
-    #     google_credentials=google_auth()
-    # )))
-    print(result)
+    # url = 'https://viyar.ua/catalog/neon_lenta_smd_2835_9_6vt_12v_ip20_4kh10_mm_kholodnyy_svet'
+    # resp = get(url).text
+    # google_credentials = google_auth()
+    # result = get_item_data(item_url=url, item_response=resp, google_credentials=google_credentials)
+    # # print(get_event_loop().run_until_complete(download_photos(
+    # #     photos_url_list=["https://viyar.ua/upload/resize_cache/photos/300_300_1/ph97262.jpg",
+    # #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph66441.jpg',
+    # #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph84038.jpg',
+    # #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph90731.jpg'],
+    # #     google_credentials=google_auth()
+    # # )))
+    # print(result)
+
+    get_categories_info('https://viyar.ua/catalog')
 
 # def write_photo(root: str, photo: bytes) -> None:
 #     """Записывает фотографию на диск"""

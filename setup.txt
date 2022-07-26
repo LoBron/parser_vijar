@@ -1,0 +1,13 @@
+docker run --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=1 -d postgres
+
+docker exec -it postgres bash
+
+# psql -U postgres -h localhost -W
+
+postgres=# create database test;
+
+postgres=# grant all privileges on database test to postgres;
+
+\c test
+
+postgres=# DROP DATABASE test;

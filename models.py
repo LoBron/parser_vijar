@@ -1,10 +1,10 @@
 from decimal import Decimal
 from typing import Union
 from pydantic import BaseModel
-from sqlalchemy import MetaData, Table, Column, Integer, String, Text, Boolean, ForeignKey, DECIMAL
+from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, DECIMAL
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, declared_attr
-from sqlalchemy_mptt.mixins import BaseNestedSets
+from sqlalchemy.orm import relationship
+from my_sqlalchemy_mptt import BaseNestedSets
 
 # metadata = MetaData()
 #
@@ -42,12 +42,7 @@ class Cat(Base, BaseNestedSets):
     id = Column(Integer(), primary_key=True, autoincrement=True)
     name = Column(String(50))
     slug = Column(String(50), unique=True)
-    sqlalchemy_mptt_default_level = 0
     products = relationship("Prod")
-
-    @declared_attr
-    def right(self):
-        return Column("rght", Integer, nullable=False)
 
 
 class Prod(Base):
