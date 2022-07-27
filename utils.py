@@ -27,21 +27,21 @@ from models import Cat
 
 # DATABASE_URL = 'postgresql+asyncpg://postgres:1@localhost:5432/test'
 DATABASE_URL = 'postgresql+psycopg2://postgres:1@localhost:5432/test'
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(DATABASE_URL, echo=False)
 Session = mptt_sessionmaker(sessionmaker(bind=engine))
 
 # session = sessionmaker(bind=engine)
 
 
 def add_cat_to_database(cat_data: dict, parent_id: Union[int, None] = None):
-    session = Session()
-    cat = Cat()
-    cat.name = cat_data.get('name')
-    cat.slug = cat_data.get('slug')
-    cat.parent_id = parent_id
-    session.add(cat)
-    session.commit()
-    return cat.id
+    with Session() as session:
+        cat = Cat()
+        cat.name = cat_data.get('name')
+        cat.slug = cat_data.get('slug')
+        cat.parent_id = parent_id
+        session.add(cat)
+        session.commit()
+        return cat.id
 
 
 def get_categories_info(main_url: str) -> List[dict]:
@@ -49,52 +49,50 @@ def get_categories_info(main_url: str) -> List[dict]:
     categories_info = []
     response_obj = get(main_url)
     html_page = BS(response_obj.content, 'html.parser')
-    items0_list = html_page.select('.main-menu > .top_level > li')
-    print(items0_list)
+    item_0_list = html_page.select('.dropdown__list-item_lev1')
 
-    for item0 in items0_list[:]:  # items0_list: #####################
-        cat0_name = item0.find_all('span')[0].text.strip()
-        if cat0_name in ['Фасады', 'Фасади']:
+    for item_0 in item_0_list[:8]:  # items0_list: #####################
+        cat_0_name = item_0.select('a > .text')[0].text
+        cat_0_slug = item_0.select('a')[0].get('href').split('/')[-2]
+        if cat_0_name in ['Фасады', 'Фасади']:
             continue
         else:
-            cats_0 = {}
-            cats_0["name"] = cat0_name
-            cats_0["slug"] = 'надо доработать'
-            cats_0["cats_1"] = []
-            print(cats_0)
-            parent_id_0 = add_cat_to_database(cats_0)
-            print(parent_id_0)
+            cat_0 = {}
+            cat_0["name"] = cat_0_name
+            cat_0["slug"] = cat_0_slug
+            cat_0["cats_1"] = []
+            parent_id_0 = add_cat_to_database(cat_0)
 
-            items1_list = item0.select('.hidden-label > div')
-            for item1 in items1_list[:]:  # items1_list: #####################
-                if len(item1) > 0:
-                    links = item1.find_all('a')
-                    cat1_name = links[0].text.strip()
-                    if cat1_name in ['Мойки из искусственного камня  Belterno', 'Мийки зі штучного каменю  Belterno']:
-                        continue
-                    else:
-                        cats_1 = {}
-                        cats_1["name"] = cat1_name
-                        href_list_1 = links[0]["href"].split("/")
-                        cats_1["href"] = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
-                        cats_1["slug"] = cats_1["href"].split('/')[-2]
-                        cats_1["cats_2"] = []
-                        parent_id_1 = add_cat_to_database(cats_1, parent_id_0)
-                        print(parent_id_1)
-                        if len(links) > 1:
-                            for n in range(1, len(links)):  # range(1, len(links)):  #####################
-                                cats_2 = {}
-                                cats_2["name"] = links[n].text.strip()
-                                href_list_2 = links[n]["href"].split("/")
-                                cats_2["href"] = f'/{href_list_2[-3]}/{href_list_2[-2]}/'
-                                cats_2["slug"] = cats_2["href"].split('/')[-2]
-                                parent_id_2 = add_cat_to_database(cats_2, parent_id_1)
-                                print(parent_id_2)
+            item_1_list = item_0.select('.li_lev2')
+            for item_1 in item_1_list[:]:  # items1_list: #####################
+                links_1 = item_1.find_all('a')
+                cat_1_name = links_1[0].text.strip()
+                if cat_1_name in ['Мойки из искусственного камня  Belterno', 'Мийки зі штучного каменю  Belterno']:
+                    continue
+                else:
+                    cat_1 = {}
+                    cat_1["name"] = cat_1_name
+                    href_list_1 = links_1[0]["href"].split("/")
+                    cat_1["href"] = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
+                    cat_1["slug"] = cat_1["href"].split('/')[-2]
+                    cat_1["cats_2"] = []
+                    parent_id_1 = add_cat_to_database(cat_1, parent_id_0)
 
-                                cats_1["cats_2"].append(cats_2)
-                        cats_0["cats_1"].append(cats_1)
-            categories_info.append(cats_0)
-    print('Cписок с данными о разделах создан\n')
+                    item_2_list = item_1.select('.dropdown__list-item')
+                    if len(item_2_list) > 0:
+                        for item_2 in item_2_list[:]:
+                            links_2 = item_2.find_all('a')
+                            cat_2 = {}
+                            cat_2["name"] = links_2[0].text.strip()
+                            href_list_2 = links_2[0]["href"].split("/")
+                            cat_2["href"] = f'/{href_list_2[-3]}/{href_list_2[-2]}/'
+                            cat_2["slug"] = cat_2["href"].split('/')[-2]
+                            parent_id_2 = add_cat_to_database(cat_2, parent_id_1)
+
+                            cat_1["cats_2"].append(cat_2)
+                    cat_0["cats_1"].append(cat_1)
+            categories_info.append(cat_0)
+    print('\nCписок с данными о категориях создан\n')
     return categories_info
 
 
