@@ -51,7 +51,7 @@ def get_categories_info(main_url: str) -> List[dict]:
     html_page = BS(response_obj.content, 'html.parser')
     item_0_list = html_page.select('.dropdown__list-item_lev1')
 
-    for item_0 in item_0_list[:8]:  # items0_list: #####################
+    for item_0 in item_0_list[:1]:  # item_0_list[:8] #####################
         cat_0_name = item_0.select('a > .text')[0].text
         cat_0_slug = item_0.select('a')[0].get('href').split('/')[-2]
         if cat_0_name in ['Фасады', 'Фасади']:
@@ -61,10 +61,10 @@ def get_categories_info(main_url: str) -> List[dict]:
             cat_0["name"] = cat_0_name
             cat_0["slug"] = cat_0_slug
             cat_0["cats_1"] = []
-            parent_id_0 = add_cat_to_database(cat_0)
+            # parent_id_0 = add_cat_to_database(cat_0)
 
             item_1_list = item_0.select('.li_lev2')
-            for item_1 in item_1_list[:]:  # items1_list: #####################
+            for item_1 in item_1_list[:1]:  # item_1_list[:] #####################
                 links_1 = item_1.find_all('a')
                 cat_1_name = links_1[0].text.strip()
                 if cat_1_name in ['Мойки из искусственного камня  Belterno', 'Мийки зі штучного каменю  Belterno']:
@@ -76,18 +76,18 @@ def get_categories_info(main_url: str) -> List[dict]:
                     cat_1["href"] = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
                     cat_1["slug"] = cat_1["href"].split('/')[-2]
                     cat_1["cats_2"] = []
-                    parent_id_1 = add_cat_to_database(cat_1, parent_id_0)
+                    # parent_id_1 = add_cat_to_database(cat_1, parent_id_0)
 
                     item_2_list = item_1.select('.dropdown__list-item')
                     if len(item_2_list) > 0:
-                        for item_2 in item_2_list[:]:
+                        for item_2 in item_2_list[:1]:  # item_2_list[:] #####################
                             links_2 = item_2.find_all('a')
                             cat_2 = {}
                             cat_2["name"] = links_2[0].text.strip()
                             href_list_2 = links_2[0]["href"].split("/")
                             cat_2["href"] = f'/{href_list_2[-3]}/{href_list_2[-2]}/'
                             cat_2["slug"] = cat_2["href"].split('/')[-2]
-                            parent_id_2 = add_cat_to_database(cat_2, parent_id_1)
+                            # parent_id_2 = add_cat_to_database(cat_2, parent_id_1)
 
                             cat_1["cats_2"].append(cat_2)
                     cat_0["cats_1"].append(cat_1)
@@ -100,19 +100,18 @@ def add_products_data(data: List[dict], main_url: str) -> List[dict]:
     """Добавляет к данным о категоряих данные об их товарах и возвращает полученный список с категориями"""
     for i in range(len(data)):  # range(len(data)):
         print(f'Добавляем данные в раздел {data[i]["name"]}\n')
-        for j in range(len(data[i].get("categories_level_1"))):
-            if len(data[i].get("categories_level_1")[j].get("categories_level_2")) > 0:
-                for k in range(len(data[i].get("categories_level_1")[j].get("categories_level_2"))):
-                    url = main_url[:-8] + data[i].get("categories_level_1")[j].get("categories_level_2")[k]['href']
+        for j in range(len(data[i].get("cats_1"))):
+            if len(data[i].get("cats_1")[j].get("cats_2")) > 0:
+                for k in range(len(data[i].get("cats_1")[j].get("cats_2"))):
+                    url = main_url[:-8] + data[i].get("cats_1")[j].get("cats_2")[k]['href']
                     print(f'  Добавляем список с данными о товарах \
-                    внутри категории {data[i].get("categories_level_1")[j].get("categories_level_2")[k]["name"]}')
-                    data[i].get("categories_level_1")[j].get("categories_level_2")[k]['products'] = get_products_data(
-                        category_url=url)
+                    внутри категории {data[i].get("cats_1")[j].get("cats_2")[k]["name"]}')
+                    data[i].get("cats_1")[j].get("cats_2")[k]['products'] = get_products_data(category_url=url)
             else:
-                url = main_url[:-8] + data[i].get("categories_level_1")[j]['href']
+                url = main_url[:-8] + data[i].get("cats_1")[j]['href']
                 print(f'  Добавляем список с данными о товарах \
-                внутри категории {data[i].get("categories_level_1")[j]["name"]}')
-                data[i].get("categories_level_1")[j]['products'] = get_products_data(category_url=url)
+                внутри категории {data[i].get("cats_1")[j]["name"]}')
+                data[i].get("cats_1")[j]['products'] = get_products_data(category_url=url)
     return data
 
 
@@ -148,17 +147,18 @@ async def get_response_page(url: str, session: ClientSession):
 async def get_response_pages(category_url: str):
     """Возвращает список response обьектов со страницами пагинатора внутри категории"""
     response_page_list = []
-    response_page = get(f'{category_url}')
+    response_page = get(category_url)
     response_page_list.append(response_page.text)
     item_html = BS(response_page_list[0], 'html.parser')
-    paggination_list = item_html.select('.paggination > li')
-    if 0 <= len(paggination_list) <= 2:
+    pagination_list = item_html.select('a.pagination__item')
+    if len(pagination_list) == 0:
         return response_page_list
     else:
-        n = int(paggination_list[-2].text)
+        amount_pages = int(pagination_list[-1].text)
+        print(amount_pages)
         async with ClientSession() as session:
             task_list = [create_task(get_response_page(f'{category_url}page-{number_page}',
-                                                       session)) for number_page in range(2, n + 1)]
+                                                       session)) for number_page in range(2, amount_pages + 1)]
             response_page_list += await gather(*task_list)
     return response_page_list
 
@@ -169,12 +169,12 @@ async def get_response_pages(category_url: str):
 def get_urls(response_page: str) -> List[str]:
     url_list = []
     html = BS(response_page, 'html.parser')
-    items = html.select('.product_prewiew')
+    items = html.select('a.product-card__media')
     if len(items):
         for item in items:
-            product = item.select('a')
-            url = f"https://viyar.ua{product[0].get('href')}"
-            url_list.append(url[:-1])
+            product = item.get('href')
+            url = f"https://viyar.ua{product[:-1]}"
+            url_list.append(url)
     return url_list
 
 
@@ -219,7 +219,7 @@ def google_auth():
       """
     creds = None
     SCOPES = ['https://www.googleapis.com/auth/drive']
-    # The file token.json stores the user's access and refresh tokens, and is
+    # The file credentials.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
     if exists('token.json'):
@@ -246,8 +246,8 @@ def get_item_data(item_url: str, item_response: str, google_credentials: Credent
     item_data['slug'] = get_slug(item_url)
     item_data['price'] = get_price(item_html)
     item_data['properties'] = get_properties(item_html)
-    photos_url_dict = get_photos_urls(item_data['name'], item_html)
-    item_data['photos'] = get_event_loop().run_until_complete(download_photos(photos_url_dict, google_credentials))
+    item_data['photos'] = get_photos_urls(item_data['name'], item_html)
+    get_event_loop().run_until_complete(download_photos(item_data['photos'], google_credentials))
     return item_data
 
 
@@ -272,7 +272,7 @@ def get_items_data(items_response_list: list) -> List[dict]:
 def get_name(item_html: BS) -> str:
     """Возвращает наименование товара"""
     try:
-        name = item_html.select('.product_name > h1 > b')[0].text.strip()
+        name = item_html.select('h1.product__title-text')[0].text.strip()
     except Exception:
         return f'Exeption {int(time() * 1000)}'
     else:
@@ -292,10 +292,10 @@ def get_price(item_html: BS) -> float:
     """Возвращает стоимость товара за единицу"""
     try:
         try:
-            price = float(item_html.select('span.price')[0].text.strip())
+            price = float(item_html.select('span.product-price__price')[0].text.strip())
         except ValueError:
             price = ''
-            list_p = item_html.select('span.price')[0].text.strip().split()
+            list_p = item_html.select('span.product-price__price')[0].text.strip().split()
             for i in list_p:
                 price += i
             price = float(price)
@@ -308,16 +308,12 @@ def get_price(item_html: BS) -> float:
 def get_properties(item_html: BS) -> Dict[str, str]:
     """Возвращает характеристики товара"""
     properties = {}
-    prop_list = item_html.select('div.charakters > ul.properties > li')
-    n = 1
+    prop_list = item_html.select('div.product-info__content-substatus')
     try:
-        for prop in prop_list:
-            if n <= len(prop_list) / 2:
-                property = prop.text.split(': ')
-                properties[property[0]] = property[1].lower()
-                n += 1
-            else:
-                break
+        for property in prop_list:
+            property_name = property.select('div.product-info__content-substatus-name')[0].text.strip(':')
+            property_value = property.select('div.text')[0].text.strip()
+            properties[property_name] = property_value
     except Exception as ex:
         properties[f'Exception - {ex}'] = 'свойства не добавлены'
     return properties
@@ -326,16 +322,17 @@ def get_properties(item_html: BS) -> Dict[str, str]:
 def get_photos_urls(name: str, item_html: BS) -> Dict[str, str]:
     """Возвращает список url адресов фотографий товара"""
     photos_url_dict = {}
-    for n in range(1, 5):
-        try:
-            if n == 1:
-                photo = item_html.find_all('img', alt=name)
-            else:
-                photo = item_html.find_all('img', alt=name + ' — фото' + str(n))
-            photo_url = f"https://viyar.ua{photo[0].get('src')}"
-            photos_url_dict[f'photo{n}'] = photo_url
-        except IndexError:
-            break
+    try:
+        list_ = item_html.select('div.product-demo__body > ul > li')
+        if len(list_) > 0:
+            n = 1
+            for l in list_:
+                src = l.select('img')[0].get('src')
+                photo_url = f"https://viyar.ua{src}"
+                photos_url_dict[f'photo{n}'] = photo_url
+                n += 1
+    except Exception as ex:
+        print(f'Ошибка добавления ссылок на изображения товара ---{name}---{ex}')
     return photos_url_dict
 
 
@@ -390,20 +387,35 @@ def google_upload_image(key: str,
 
 
 if __name__ == '__main__':
-    # url = 'https://viyar.ua/catalog/neon_lenta_smd_2835_9_6vt_12v_ip20_4kh10_mm_kholodnyy_svet'
-    # resp = get(url).text
-    # google_credentials = google_auth()
-    # result = get_item_data(item_url=url, item_response=resp, google_credentials=google_credentials)
-    # # print(get_event_loop().run_until_complete(download_photos(
-    # #     photos_url_list=["https://viyar.ua/upload/resize_cache/photos/300_300_1/ph97262.jpg",
-    # #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph66441.jpg',
-    # #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph84038.jpg',
-    # #                      'https://viyar.ua/upload/resize_cache/photos/300_300_1/ph90731.jpg'],
-    # #     google_credentials=google_auth()
-    # # )))
-    # print(result)
+    url = 'https://viyar.ua/catalog/dvoiarusne_lizhko'
+    resp = get(url).text
+    google_credentials = google_auth()
+    result = get_item_data(item_url=url, item_response=resp, google_credentials=google_credentials)
+    print(result)
 
-    get_categories_info('https://viyar.ua/catalog')
+    # main_url = 'https://viyar.ua/catalog'
+    # data = get_categories_info(main_url)
+    # add_products_data(data, main_url)
+
+
+
+    # item_url = 'https://viyar.ua/catalog/dsp_cleaf_duna_fiocco_seta_fc08_baragan_tolshchina_18_18_5mm'
+    # item_response = get(item_url).text
+    # google_credentials = google_auth()
+    # item_data = get_item_data(item_url, item_response, google_credentials)
+    # print(item_data)
+
+
+    # item_data = {}
+    # item_html = BS(item_response, 'html.parser')
+    # item_data['name'] = get_name(item_html)
+    # item_data['slug'] = get_slug(item_url)
+    # item_data['price'] = get_price(item_html)
+    # item_data['properties'] = get_properties(item_html)
+    # photos_url_dict = get_photos_urls(item_data['name'], item_html)
+    # print(item_data)
+    # print(photos_url_dict)
+
 
 # def write_photo(root: str, photo: bytes) -> None:
 #     """Записывает фотографию на диск"""
