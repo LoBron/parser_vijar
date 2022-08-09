@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, DECIMAL
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from my_sqlalchemy_mptt import BaseNestedSets
+from database.my_sqlalchemy_mptt import BaseNestedSets
 
 # metadata = MetaData()
 #
@@ -45,6 +45,23 @@ class Cat(Base, BaseNestedSets):
     products = relationship("Prod")
 
 
+class PropValue(Base):
+    __tablename__ = 'catalog_propertyvalue'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    product_id = Column(Integer(), ForeignKey("catalog_product.id"))
+    property_id = Column(Integer(), ForeignKey("catalog_property.id"))
+    value = Column(String(200))
+
+
+# prop_value = Table(
+#     'catalog_propertyvalue', Base.metadata,
+#     Column('id', Integer(), primary_key=True, autoincrement=True),
+#     Column('product_id', Integer(), ForeignKey("catalog_product.id")),
+#     Column('property_id', Integer(), ForeignKey("catalog_property.id")),
+#     Column('value', String(200))
+# )
+
+
 class Prod(Base):
     __tablename__ = 'catalog_product'
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -59,6 +76,13 @@ class Prod(Base):
     photo2 = Column(String, nullable=True)
     photo3 = Column(String, nullable=True)
     photo4 = Column(String, nullable=True)
+    properties = relationship("PropValue", backref="catalog_product")
+
+class Prop(Base):
+    __tablename__ = 'catalog_property'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(200), unique=True)
+    products = relationship("PropValue", backref="catalog_property")
 
 
 class Category(BaseModel):

@@ -1,143 +1,20 @@
 from __future__ import print_function
 
-import random
+from datetime import datetime
 from asyncio import get_event_loop, create_task, gather
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from random import choice
 from time import time
 from typing import List, Dict, Tuple, Any, Optional, Union
-from decimal import Decimal
+from io import BytesIO
 
 from requests import get
 
 from aiohttp import ClientSession, ClientError
 from bs4 import BeautifulSoup as BS
 
-from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, Session
-
-from my_sqlalchemy_mptt import mptt_sessionmaker
-from models import Cat, Prod
-
-from io import BytesIO
-from os.path import exists
-
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaIoBaseUpload
-
-DATABASE_URL = 'postgresql+psycopg2://postgres:1@localhost:5432/test'
-engine = create_engine(DATABASE_URL, echo=False)
-Session = mptt_sessionmaker(sessionmaker(bind=engine))
-
-ASYNC_DATABASE_URL = 'postgresql+asyncpg://postgres:1@localhost:5432/test'
-asyns_engine = create_async_engine(ASYNC_DATABASE_URL, echo=False)
-async_session = sessionmaker(asyns_engine, expire_on_commit=False, class_=AsyncSession)
-
-
-def google_search_folder(folder_name: str, google_credentials: Credentials) -> Union[str, None]:
-    """Search file in drive location
-
-    Load pre-authorized user credentials from the environment.
-    TODO(developer) - See https://developers.google.com/identity
-    for guides on implementing OAuth2 for the application.
-    """
-    folder_id = None
-    try:
-        # create drive api client
-        service = build('drive', 'v3', credentials=google_credentials)
-        files = []
-        page_token = None
-        while True:
-            # pylint: disable=maybe-no-member
-            response = service.files().list(q="mimeType = 'application/vnd.google-apps.folder'",
-                                            spaces='drive',
-                                            fields='nextPageToken, '
-                                                   'files(id, name)',
-                                            pageToken=page_token).execute()
-            # for file in response.get('files', []):
-            #     # Process change
-            #     print(F'Found file: {file.get("name")}, {file.get("id")}')
-            files.extend(response.get('files', []))
-            page_token = response.get('nextPageToken', None)
-            if page_token is None:
-                break
-
-        for file in files:
-            if file.get("name") == folder_name:
-                folder_id = file.get("id")
-                break
-
-    except HttpError as error:
-        print(F'An error occurred: {error}')
-
-    return folder_id
-
-
-def google_create_folder(folder_name: str, google_credentials: Credentials) -> Union[str, None]:
-    """ Create a folder and prints the folder ID
-    Returns : Folder Id
-
-    Load pre-authorized user credentials from the environment.
-    TODO(developer) - See https://developers.google.com/identity
-    for guides on implementing OAuth2 for the application.
-    """
-    folder_id = None
-    try:
-        # create drive api client
-        service = build('drive', 'v3', credentials=google_credentials)
-        file_metadata = {
-            'name': folder_name,
-            'mimeType': 'application/vnd.google-apps.folder'
-        }
-
-        # pylint: disable=maybe-no-member
-        file = service.files().create(body=file_metadata, fields='id'
-                                      ).execute()
-        folder_id = file.get("id")
-
-    except HttpError as error:
-        print(F'An error occurred: {error}')
-
-    return folder_id
-
-
-async def add_product_to_database(product_data: dict, cat_id: int) -> dict:
-    async with async_session() as session:
-        async with session.begin():
-            prod = Prod()
-            prod.category_id = cat_id
-            prod.name = product_data['name']
-            prod.slug = product_data['slug']
-            prod.description = product_data['description']
-            prod.price = Decimal(product_data['price'])
-            prod.availability = random.choice([True, False, True, True, True])
-            if prod.availability:
-                prod.amount = random.randint(1, 100)
-            else:
-                prod.amount = 0
-            prod.photo1 = product_data['photos'].get('photo1')
-            prod.photo2 = product_data['photos'].get('photo2')
-            prod.photo3 = product_data['photos'].get('photo3')
-            prod.photo4 = product_data['photos'].get('photo4')
-            session.add(prod)
-        await session.commit()
-        return {'prod_id': prod.id, 'properties': product_data['properties']}
-
-
-def add_cat_to_database(cat_data: dict, parent_id: Union[int, None] = None):
-    with Session() as session:
-        cat = Cat()
-        cat.name = cat_data.get('name')
-        cat.slug = cat_data.get('slug')
-        cat.parent_id = parent_id
-        session.add(cat)
-        session.commit()
-        return cat.id
+from database.views import add_category_to_db, add_product_to_db, add_property_to_db, add_value_to_db
+from google_api.views import google_auth, google_upload_image, google_create_folder, google_search_folder
 
 
 def get_categories_info(main_url: str) -> List[dict]:
@@ -157,7 +34,7 @@ def get_categories_info(main_url: str) -> List[dict]:
             cat_0["name"] = cat_0_name
             cat_0["slug"] = cat_0_slug
             cat_0["cats_1"] = []
-            cat_id_0 = add_cat_to_database(cat_0)
+            cat_id_0 = add_category_to_db(cat_0)
             cat_0['cat_id'] = cat_id_0
 
             item_1_list = item_0.select('.li_lev2')
@@ -173,7 +50,7 @@ def get_categories_info(main_url: str) -> List[dict]:
                     cat_1["href"] = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
                     cat_1["slug"] = cat_1["href"].split('/')[-2]
                     cat_1["cats_2"] = []
-                    cat_id_1 = add_cat_to_database(cat_1, cat_id_0)
+                    cat_id_1 = add_category_to_db(cat_1, cat_id_0)
                     cat_1['cat_id'] = cat_id_1
 
                     item_2_list = item_1.select('.dropdown__list-item')
@@ -185,7 +62,7 @@ def get_categories_info(main_url: str) -> List[dict]:
                             href_list_2 = links_2[0]["href"].split("/")
                             cat_2["href"] = f'/{href_list_2[-3]}/{href_list_2[-2]}/'
                             cat_2["slug"] = cat_2["href"].split('/')[-2]
-                            cat_id_2 = add_cat_to_database(cat_2, cat_id_1)
+                            cat_id_2 = add_category_to_db(cat_2, cat_id_1)
                             cat_2['cat_id'] = cat_id_2
 
                             cat_1["cats_2"].append(cat_2)
@@ -231,7 +108,7 @@ def get_products_data(category_url: str, cat_id: int, folder_id: str) -> List[di
     print(f'     получили items_urls товаров в количестве {len(items_url_list)} шт')
 
     if len(items_url_list) > 0:
-        items_response_list = get_event_loop().run_until_complete(get_items_responses(items_url_list[:]))
+        items_response_list = get_event_loop().run_until_complete(get_items_responses(items_url_list[:12]))
         print(f'     получили response_items товаров в количестве {len(items_response_list)} шт')
 
         products_data_list = get_event_loop().run_until_complete(get_items_data(items_response_list, cat_id, folder_id))
@@ -307,13 +184,14 @@ async def get_item_response(item_url: str, session: ClientSession):
         return [item_url, await response.text()]
 
 
-async def get_items_responses(items_url_list: list):
+async def get_items_responses(items_url_list: list) -> list:
     """Возвращает список response обьектов на все товары внутри категории"""
+    items_response_list = []
     try:
         try:
             async with ClientSession() as session:
                 task_list = [get_item_response(item_url, session) for item_url in items_url_list]
-                items_response_list = await gather(*task_list)
+                items_response_list += list(await gather(*task_list))
         except ClientError as e:
             print(e)
     except BaseException as ex:
@@ -322,29 +200,6 @@ async def get_items_responses(items_url_list: list):
 
 
 #######################################################################################
-def google_auth():
-    """Shows basic usage of the Drive v3 API.
-      Prints the names and ids of the first 10 files the user has access to.
-      """
-    creds = None
-    SCOPES = ['https://www.googleapis.com/auth/drive']
-    # The file credentials.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
-    return creds
 
 
 def get_item_data(item_url: str, item_response: str) -> Dict[str, Any]:
@@ -357,6 +212,7 @@ def get_item_data(item_url: str, item_response: str) -> Dict[str, Any]:
     item_data['price'] = get_price(item_html)
     item_data['properties'] = get_properties(item_html)
     item_data['photos'] = get_photos_urls(item_data['name'], item_html)
+    print(item_data['photos'])
     return item_data
 
 
@@ -411,7 +267,7 @@ async def get_items_data(items_response_list: list, cat_id: int, folder_id: str)
         items_data[item_id]['photos'][key] = fileId
 
     timer = time()
-    task_list = [create_task(add_product_to_database(data, cat_id)) for item_id, data in items_data.items()]
+    task_list = [create_task(add_product_to_db(data, cat_id)) for item_id, data in items_data.items()]
     items_id_list = await gather(*task_list)
     print(f'        Добавили {len(items_id_list)} товаров в базу, время выполнения {time() - timer} сек')
 
@@ -534,47 +390,16 @@ async def get_photo(item_id: int, key: str, url: str, session: ClientSession):
         return {'item_id': item_id, 'key': key, "name": url.split('/')[-1], "photo": await response.read()}
 
 
-def google_upload_image(item_id: int,
-                        key: str,
-                        image: BytesIO,
-                        google_credentials: Credentials,
-                        file_metadata: Dict[str, str],
-                        user_permission: Dict[str, str]) -> dict:
-    try:
-        # create gmail api client
-        service = build('drive', 'v3', credentials=google_credentials)
-        media = MediaIoBaseUpload(image, mimetype='image/jpg')
-        file = service.files().create(body=file_metadata, media_body=media).execute()
-        fileId = file.get("id")
-        service.permissions().create(fileId=fileId, body=user_permission).execute()
-        return {'item_id': item_id, 'key': key, 'fileId': fileId}
-
-    except HttpError as error:
-        print(F'An error occurred: {error}')
-        return {'item_id': item_id, 'key': key, 'fileId': None}
-
-
-def add_property_to_database(prop: str) -> int:
-    return 10
-
-
-def add_value_to_database(prod_id: int, prop_id: int, value: str):
-    pass
-
-
-product_props = [{'prod_id': 1, 'props': {}}, ]
-
-
-def add_properties_data(product_props: List[dict]):
+async def add_properties_data():
     prop_dict = {}
-    for product in product_props:
-        for prop, value in product['props'].items():
-            prop_id = prop_dict.get(prop)
+    for product in PRODUCTS_PROPERTIES:
+        for name, value in product['properties'].items():
+            prop_id = prop_dict.get(name)
             if not prop_id:
-                prop_id = add_property_to_database(prop)
-                prop_dict[prop] = prop_id
-            add_value_to_database(prod_id=product['prod_id'],
-                                  prop_id=prop_id,
+                prop_id = add_property_to_db(name)
+                prop_dict[name] = prop_id
+            await add_value_to_db(product_id=product['prod_id'],
+                                  property_id=prop_id,
                                   value=value)
 
 
@@ -586,14 +411,18 @@ if __name__ == '__main__':
     # print(result)
 
     creds = google_auth()
-    # folder_name = 'django_shop.catalog.images'
-    folder_name = 'test_folder'
+    folder_name = f'django_shop.catalog.images {datetime.now()}'
+    # folder_name = 'test_folder'
     folder_id = google_search_folder(folder_name, creds)
     if not folder_id:
         folder_id = google_create_folder(folder_name, creds)
+    PRODUCTS_PROPERTIES = []
+    category_url = 'https://viyar.ua/kv/catalog/moyki_franke/'
 
-    category_url = 'https://viyar.ua/catalog/ruchki_mebelnye/'
-    get_products_data(category_url=category_url, cat_id=1113, folder_id=folder_id)
+    PRODUCTS_PROPERTIES += get_products_data(category_url=category_url, cat_id=1113, folder_id=folder_id)
+    for prop in PRODUCTS_PROPERTIES:
+        print(prop)
+    get_event_loop().run_until_complete(add_properties_data())
 
     # main_url = 'https://viyar.ua/catalog'
     # data = get_categories_info(main_url)
