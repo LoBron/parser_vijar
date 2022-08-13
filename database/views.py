@@ -7,20 +7,30 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from database.my_sqlalchemy_mptt import mptt_sessionmaker
+from settings import POSTGRES
 from .models import Cat, Prod, Prop, PropValue
 
-DATABASE_URL = 'postgresql+psycopg2://postgres:1@localhost:5432/test'
+DATABASE = POSTGRES
+database_name = POSTGRES.get('DATABASE_NAME')
+user = POSTGRES.get('USERNAME')
+password = POSTGRES.get('PASSWORD')
+driver = POSTGRES.get('DRIVER')
+async_driver = POSTGRES.get('ASYNC_DRIVER')
+host = POSTGRES.get('HOST')
+port = POSTGRES.get('PORT')
+
+DATABASE_URL = f'postgresql+{driver}://{user}:{password}@{host}:{port}/{database_name}'
 engine = create_engine(DATABASE_URL, echo=False)
 Session = sessionmaker(bind=engine)
 
 Session_mptt = mptt_sessionmaker(sessionmaker(bind=engine))
 
-ASYNC_DATABASE_URL = 'postgresql+asyncpg://postgres:1@localhost:5432/test'
+ASYNC_DATABASE_URL = f'postgresql+{async_driver}://{user}:{password}@{host}:{port}/{database_name}'
 async_engine = create_async_engine(ASYNC_DATABASE_URL, echo=False)
 async_session = sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
 
 
-def add_category_to_db(cat_data: dict, parent_id: Union[int, None] = None):
+def add_category_to_db(cat_data: dict, parent_id: Union[int, None] = None) -> int:
     with Session_mptt() as session:
         cat = Cat()
         cat.name = cat_data.get('name')
@@ -31,27 +41,34 @@ def add_category_to_db(cat_data: dict, parent_id: Union[int, None] = None):
         return cat.id
 
 
-async def add_product_to_db(product_data: dict, cat_id: int) -> dict:
-    async with async_session() as session:
-        async with session.begin():
-            prod = Prod()
-            prod.category_id = cat_id
-            prod.name = product_data['name']
-            prod.slug = product_data['slug']
-            prod.description = product_data['description']
-            prod.price = Decimal(product_data['price'])
-            prod.availability = choice([True, False, True, True, True])
-            if prod.availability:
-                prod.amount = randint(1, 100)
-            else:
-                prod.amount = 0
-            prod.photo1 = product_data['photos'].get('photo1')
-            prod.photo2 = product_data['photos'].get('photo2')
-            prod.photo3 = product_data['photos'].get('photo3')
-            prod.photo4 = product_data['photos'].get('photo4')
-            session.add(prod)
-        await session.commit()
-        return {'prod_id': prod.id, 'properties': product_data['properties']}
+async def add_product_to_db(product_data: dict, cat_id: int) -> Union[dict, None]:
+    data = None
+    if product_data['photos'].get('photo1'):
+        try:
+            async with async_session() as session:
+                async with session.begin():
+                    prod = Prod()
+                    prod.category_id = cat_id
+                    prod.name = product_data['name']
+                    prod.slug = product_data['slug']
+                    prod.description = product_data['description']
+                    prod.price = Decimal(product_data['price'])
+                    prod.availability = choice([True, False, True, True, True, True, True, True, True, True])
+                    if prod.availability:
+                        prod.amount = randint(1, 100)
+                    else:
+                        prod.amount = 0
+                    prod.photo1 = product_data['photos'].get('photo1')
+                    prod.photo2 = product_data['photos'].get('photo2')
+                    prod.photo3 = product_data['photos'].get('photo3')
+                    prod.photo4 = product_data['photos'].get('photo4')
+                    session.add(prod)
+                await session.commit()
+        except Exception as ex:
+            print(f'Exception in add_product_to_db - cat_id: {cat_id}, product_name: {product_data["name"]}\n{ex}')
+        else:
+            data = {'prod_id': prod.id, 'properties': product_data['properties']}
+    return data
 
 
 def add_property_to_db(name: str) -> int:

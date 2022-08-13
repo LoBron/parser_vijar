@@ -1,6 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from os.path import exists
-from typing import Dict, Union
+from typing import Dict, Union, List
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -9,28 +10,56 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload
 
+from settings import GOOGLE_CREDENTIALS_NAME
 
-def google_upload_image(item_id: int,
-                        key: str,
-                        image: BytesIO,
-                        google_credentials: Credentials,
-                        file_metadata: Dict[str, str],
-                        user_permission: Dict[str, str]) -> dict:
+def get_photos_id_list(photos_response_list: List[dict],
+                       folder_id: str,
+                       google_credentials: Credentials
+                       ) -> List[dict]:
+    photos_data_list = []
+    if photos_response_list:
+        try:
+            with ThreadPoolExecutor(max_workers=40) as executor:
+                user_permission = {'type': 'anyone', 'value': 'anyone', 'role': 'reader'}
+                future_list = [executor.submit(upload_image,
+                                               item_id=response.get('item_id'),
+                                               key=response.get('key'),
+                                               image=BytesIO(response.get('photo')) if response.get('photo') else None,
+                                               google_credentials=google_credentials,
+                                               file_metadata={'name': response.get('name'), 'parents': [folder_id]},
+                                               user_permission=user_permission
+                                               ) for response in photos_response_list]
+                for future in as_completed(future_list):
+                    photos_data_list.append(future.result())
+        except Exception as ex:
+            photos_data_list.clear()
+            print(f'Exception - {ex}')
+    return photos_data_list
+
+
+def upload_image(item_id: int,
+                 key: str,
+                 image: Union[BytesIO, None],
+                 google_credentials: Credentials,
+                 file_metadata: Dict[str, str],
+                 user_permission: Dict[str, str]) -> dict:
     data = {'item_id': item_id, 'key': key, 'fileId': None}
-    try:
-        # create gmail api client
-        service = build('drive', 'v3', credentials=google_credentials)
-        media = MediaIoBaseUpload(image, mimetype='image/jpg')
-        file = service.files().create(body=file_metadata, media_body=media).execute()
-        fileId = file.get("id")
-        service.permissions().create(fileId=fileId, body=user_permission).execute()
-        data['fileId'] = fileId
-    except HttpError as error:  # HttpError
-        print(F'An error occurred: {error}')
+    if image:
+        try:
+            # create gmail api client
+            service = build('drive', 'v3', credentials=google_credentials)
+            media = MediaIoBaseUpload(image, mimetype='image/jpg')
+            file = service.files().create(body=file_metadata, media_body=media).execute()
+            fileId = file.get("id")
+            service.permissions().create(fileId=fileId, body=user_permission).execute()
+        except HttpError as error:  # HttpError
+            print(F'An error occurred: {error}')
+        else:
+            data['fileId'] = fileId
     return data
 
 
-def google_auth():
+def google_auth() -> Union[Credentials, None]:
     """Shows basic usage of the Drive v3 API.
       Prints the names and ids of the first 10 files the user has access to.
       """
@@ -46,8 +75,7 @@ def google_auth():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(GOOGLE_CREDENTIALS_NAME, SCOPES)
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
         with open('token.json', 'w') as token:
@@ -55,7 +83,7 @@ def google_auth():
     return creds
 
 
-def google_search_folder(folder_name: str, google_credentials: Credentials) -> Union[str, None]:
+def search_folder(folder_name: str, google_credentials: Credentials) -> Union[str, None]:
     """Search file in drive location
 
     Load pre-authorized user credentials from the environment.
@@ -94,7 +122,7 @@ def google_search_folder(folder_name: str, google_credentials: Credentials) -> U
     return folder_id
 
 
-def google_create_folder(folder_name: str, google_credentials: Credentials) -> Union[str, None]:
+def create_folder(folder_name: str, google_credentials: Credentials) -> Union[str, None]:
     """ Create a folder and prints the folder ID
     Returns : Folder Id
 

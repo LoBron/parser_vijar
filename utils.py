@@ -1,23 +1,103 @@
-from __future__ import print_function
-
-from datetime import datetime
 from asyncio import get_event_loop, create_task, gather
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from random import choice
 from time import time
-from typing import List, Dict, Tuple, Any, Optional, Union
-from io import BytesIO
-
+from typing import List, Dict, Any, Union, Tuple
 from requests import get
 
-from aiohttp import ClientSession, ClientError
+from aiohttp import ClientSession
 from bs4 import BeautifulSoup as BS
 
 from database.views import add_category_to_db, add_product_to_db, add_property_to_db, add_value_to_db
-from google_api.views import google_auth, google_upload_image, google_create_folder, google_search_folder
+from google_api.views import google_auth, create_folder, search_folder, get_photos_id_list
+from settings import MAIN_URL, GOOGLE_FOLDER_NAME
 
 
-def get_categories_info(main_url: str) -> List[dict]:
+class Parser:
+    """здарова ёпта"""
+
+    def __init__(self):
+        self.__main_url = MAIN_URL
+        self.__google_credentials = google_auth()
+        self.__folder_id = search_folder(GOOGLE_FOLDER_NAME, self.__google_credentials)
+        # нужно доработать вариант когда искомая папка находится в корзине
+        if not self.__folder_id:
+            self.__folder_id = create_folder(GOOGLE_FOLDER_NAME, self.__google_credentials)
+            if not self.__folder_id:
+                raise FolderIdError
+        self.__PRODUCTS_PROPERTIES = []
+        self.data = None
+
+    def run(self):
+        self._add_categories_data()
+        self._add_products_data()
+        self._add_properties_and_values()
+
+    def _add_categories_data(self):
+        self.data = add_categories_data(self.__main_url)
+
+    def _add_products_data(self):
+        """Добавляет к данным о категоряих данные об их товарах и возвращает полученный список с категориями"""
+        # это пиздец нечитаемо, нужно попытаться переработать
+        for i in range(len(self.data)):  # range(len(data)):
+            print(f'Добавляем данные в раздел {self.data[i]["name"]}\n')
+            for j in range(len(self.data[i].get("cats_1"))):
+                if len(self.data[i].get("cats_1")[j].get("cats_2")) > 0:
+                    for k in range(len(self.data[i].get("cats_1")[j].get("cats_2"))):
+                        url = self.__main_url[:-8] + self.data[i].get("cats_1")[j].get("cats_2")[k]['href']
+                        cat_id = self.data[i].get("cats_1")[j].get("cats_2")[k]['cat_id']
+                        print(f'  Добавляем список с данными о товарах \
+                        внутри категории {self.data[i].get("cats_1")[j].get("cats_2")[k]["name"]}')
+                        products_data, products_properties = self._get_products_data(category_url=url, cat_id=cat_id)
+                        self.data[i].get("cats_1")[j].get("cats_2")[k]['products'] = products_data
+                        self.__PRODUCTS_PROPERTIES += products_properties
+                else:
+                    url = self.__main_url[:-8] + self.data[i].get("cats_1")[j]['href']
+                    cat_id = self.data[i].get("cats_1")[j]['cat_id']
+                    print(f'  Добавляем список с данными о товарах \
+                    внутри категории {self.data[i].get("cats_1")[j]["name"]}')
+                    products_data, products_properties = self._get_products_data(category_url=url, cat_id=cat_id)
+                    self.__PRODUCTS_PROPERTIES += self._get_products_data(category_url=url, cat_id=cat_id)
+                    self.data[i].get("cats_1")[j]['products'] = products_data
+                    self.__PRODUCTS_PROPERTIES += products_properties
+
+    def _add_properties_and_values(self):
+        timer = time()
+        properties = get_event_loop().run_until_complete(add_properties_data(self.__PRODUCTS_PROPERTIES))
+        print(f'        Добавили {len(properties)} свойств, время выполнения {time() - timer} сек')
+
+    def _get_products_data(self, category_url: str, cat_id: int) -> Tuple[list, list]:
+        """
+        Возвращает список с данными о товарах внутри категории.
+        category_url format - 'https://viyar.ua/catalog/ruchki_mebelnye/'
+        """
+        try:
+            s = time()
+            pages_response_list = get_event_loop().run_until_complete(
+                get_pages_response_list(category_url=category_url))
+            print(f'     получили responces {len(pages_response_list)} шт')
+
+            items_url_list = get_items_url_list(pages_response_list[:])
+            print(f'     получили items_urls товаров {len(items_url_list)} шт')
+
+            if items_url_list:
+                items_response_list = get_event_loop().run_until_complete(get_items_response_list(items_url_list[:]))
+                print(f'     получили response_items товаров {len(items_response_list)} шт')
+
+                if items_response_list:
+                    products_data, products_properties = get_event_loop().run_until_complete(
+                        get_items_data(items_response_list, cat_id, self.__folder_id, self.__google_credentials)
+                    )
+                    print(
+                        f'     получили products_data {len(products_data)} шт, время выполнения {time() - s} сек\n')
+                    print(f'     добавили в базу {len(products_properties)} шт товаров')
+                    return products_data, products_properties
+            return ()
+        except Exception as ex:
+            print(f'Exception in get_products_data - cat_id: {cat_id}, category_url: {category_url}\n{ex}')
+
+
+def add_categories_data(main_url: str) -> List[dict]:
     """Возвращает список с данными(словарями) о категориях"""
     categories_info = []
     response_obj = get(main_url)
@@ -72,206 +152,271 @@ def get_categories_info(main_url: str) -> List[dict]:
     return categories_info
 
 
-def add_products_data(data: List[dict], main_url: str) -> List[dict]:
-    """Добавляет к данным о категоряих данные об их товарах и возвращает полученный список с категориями"""
-    for i in range(len(data)):  # range(len(data)):
-        print(f'Добавляем данные в раздел {data[i]["name"]}\n')
-        for j in range(len(data[i].get("cats_1"))):
-            if len(data[i].get("cats_1")[j].get("cats_2")) > 0:
-                for k in range(len(data[i].get("cats_1")[j].get("cats_2"))):
-                    url = main_url[:-8] + data[i].get("cats_1")[j].get("cats_2")[k]['href']
-                    cat_id = data[i].get("cats_1")[j].get("cats_2")[k]['cat_id']
-                    print(f'  Добавляем список с данными о товарах \
-                    внутри категории {data[i].get("cats_1")[j].get("cats_2")[k]["name"]}')
-                    data[i].get("cats_1")[j].get("cats_2")[k]['products'] = get_products_data(
-                        category_url=url,
-                        cat_id=cat_id)
-            else:
-                url = main_url[:-8] + data[i].get("cats_1")[j]['href']
-                cat_id = data[i].get("cats_1")[j]['cat_id']
-                print(f'  Добавляем список с данными о товарах \
-                внутри категории {data[i].get("cats_1")[j]["name"]}')
-                data[i].get("cats_1")[j]['products'] = get_products_data(category_url=url, cat_id=cat_id)
-    return data
+# def _add_products_data(data: List[dict], main_url: str) -> List[dict]:
+#     """Добавляет к данным о категоряих данные об их товарах и возвращает полученный список с категориями"""
+#     for i in range(len(data)):  # range(len(data)):
+#         print(f'Добавляем данные в раздел {data[i]["name"]}\n')
+#         for j in range(len(data[i].get("cats_1"))):
+#             if len(data[i].get("cats_1")[j].get("cats_2")) > 0:
+#                 for k in range(len(data[i].get("cats_1")[j].get("cats_2"))):
+#                     url = main_url[:-8] + data[i].get("cats_1")[j].get("cats_2")[k]['href']
+#                     cat_id = data[i].get("cats_1")[j].get("cats_2")[k]['cat_id']
+#                     print(f'  Добавляем список с данными о товарах \
+#                     внутри категории {data[i].get("cats_1")[j].get("cats_2")[k]["name"]}')
+#                     data[i].get("cats_1")[j].get("cats_2")[k]['products'] = get_products_data(
+#                         category_url=url,
+#                         cat_id=cat_id)
+#             else:
+#                 url = main_url[:-8] + data[i].get("cats_1")[j]['href']
+#                 cat_id = data[i].get("cats_1")[j]['cat_id']
+#                 print(f'  Добавляем список с данными о товарах \
+#                 внутри категории {data[i].get("cats_1")[j]["name"]}')
+#                 data[i].get("cats_1")[j]['products'] = get_products_data(category_url=url, cat_id=cat_id)
+#     return data
 
 
-def get_products_data(category_url: str, cat_id: int, folder_id: str) -> List[dict]:
-    """
-    Возвращает список с данными о товарах внутри категории.
-    category_url format - 'https://viyar.ua/catalog/ruchki_mebelnye/'
-    """
-    s = time()
-    response_pages_list = get_event_loop().run_until_complete(get_response_pages(category_url=category_url))
-    print(f'     получили responces в количестве {len(response_pages_list)} шт')
-
-    items_url_list = get_items_urls(response_pages_list[:1])
-    print(f'     получили items_urls товаров в количестве {len(items_url_list)} шт')
-
-    if len(items_url_list) > 0:
-        items_response_list = get_event_loop().run_until_complete(get_items_responses(items_url_list[:12]))
-        print(f'     получили response_items товаров в количестве {len(items_response_list)} шт')
-
-        products_data_list = get_event_loop().run_until_complete(get_items_data(items_response_list, cat_id, folder_id))
-        print(f'     получили products_data \
-в количестве {len(products_data_list)} шт, время выполнения {time() - s} сек')
-        print('')
-        return products_data_list
-    print('')
-    return []
+# def _get_products_data(category_url: str, cat_id: int, folder_id: str) -> List[dict]:
+#     """
+#     Возвращает список с данными о товарах внутри категории.
+#     category_url format - 'https://viyar.ua/catalog/ruchki_mebelnye/'
+#     """
+#     try:
+#         s = time()
+#         pages_response_list = get_event_loop().run_until_complete(get_pages_response_list(category_url=category_url))
+#         print(f'     получили responces {len(pages_response_list)} шт')
+#
+#         items_url_list = get_items_url_list(pages_response_list[:])
+#         print(f'     получили items_urls товаров {len(items_url_list)} шт')
+#
+#         if items_url_list:
+#             items_response_list = get_event_loop().run_until_complete(get_items_response_list(items_url_list[:]))
+#             print(f'     получили response_items товаров {len(items_response_list)} шт')
+#
+#             if items_response_list:
+#                 products_data_list = get_event_loop().run_until_complete(
+#                     get_items_data(items_response_list, cat_id, folder_id)
+#                 )
+#                 print(f'     получили products_data {len(products_data_list)} шт, время выполнения {time() - s} сек\n')
+#                 return products_data_list
+#         return []
+#     except Exception as ex:
+#         print(f'Exception in get_products_data - cat_id: {cat_id}, category_url: {category_url}\n{ex}')
 
 
 #######################################################################################
 
-async def get_response_page(url: str, session: ClientSession):
-    async with session.get(url) as response:
-        return await response.text()
+async def get_response_page(url: str, session: ClientSession) -> Union[Any, None]:
+    try:
+        async with session.get(url) as response:
+            result = await response.text()
+    except Exception as ex:
+        print(f'Exception in get_response_page - page_url: {url}\n{ex}')
+        return None
+    else:
+        return result
 
 
-async def get_response_pages(category_url: str):
+async def get_pages_response_list(category_url: str):
     """
     Возвращает список response обьектов со страницами пагинатора внутри категории.
     category_url format - 'https://viyar.ua/catalog/ruchki_mebelnye/'
     """
-    response_page_list = []
-    response_page = get(category_url)
-    response_page_list.append(response_page.text)
-    item_html = BS(response_page_list[0], 'html.parser')
-    pagination_list = item_html.select('a.pagination__item')
-    if len(pagination_list) == 0:
-        return response_page_list
-    else:
-        amount_pages = int(pagination_list[-1].text)
-        async with ClientSession() as session:
-            task_list = [create_task(get_response_page(f'{category_url}page-{number_page}',
-                                                       session)) for number_page in
-                         range(2, amount_pages + 1)]  ############### range(2, amount_pages + 1)
-            response_page_list += await gather(*task_list)
-    return response_page_list
+    pages_response_list = []
+    try:
+        response_page = get(category_url)
+        pages_response_list.append(response_page.text)
+        item_html = BS(pages_response_list[0], 'html.parser')
+        pagination_list = item_html.select('a.pagination__item')
+        if len(pagination_list) == 0:
+            return pages_response_list
+        else:
+            try:
+                amount_pages = int(pagination_list[-1].text)
+                async with ClientSession() as session:
+                    task_list = [create_task(get_response_page(f'{category_url}page-{number_page}',
+                                                               session)) for number_page in
+                                 range(2, amount_pages + 1)]  ############### range(2, amount_pages + 1)
+                    result_list = await gather(*task_list)
+            except Exception as ex:
+                print(f"Exception - {ex}")
+            else:
+                for result in result_list:
+                    if result:
+                        pages_response_list.append(result)
+    except Exception as ex:
+        pages_response_list.clear()
+        print(f"Exception - {ex}")
+    return pages_response_list
 
 
 #######################################################################################
 
 
-def get_urls(response_page: str) -> List[str]:
-    url_list = []
-    html = BS(response_page, 'html.parser')
-    items = html.select('a.product-card__media')
-    if len(items):
-        for item in items:
-            product = item.get('href')
-            url = f"https://viyar.ua{product[:-1]}"
-            url_list.append(url)
-    return url_list
+def get_urls(response_page: str) -> Union[List[str], None]:
+    try:
+        url_list = []
+        html = BS(response_page, 'html.parser')
+        items = html.select('a.product-card__media')
+        if len(items):
+            for item in items:
+                product = item.get('href')
+                url = f"https://viyar.ua{product[:-1]}"
+                url_list.append(url)
+    except Exception as ex:
+        print(f"Exception in get_urls - {ex}")
+        return None
+    else:
+        return url_list
 
 
-def get_items_urls(response_page_list: List[str]) -> List[str]:
+def get_items_url_list(response_page_list: List[str]) -> List[str]:
     """Возвращает список URL адресов всех товаров внутри категории"""
     items_url_list = []
-    if len(response_page_list) > 0:
-        with ProcessPoolExecutor() as executor:
-            future_list = [executor.submit(get_urls, response_page) for response_page in response_page_list]
-            for future in as_completed(future_list):
-                items_url_list += future.result()
+    if response_page_list:
+        try:
+            with ProcessPoolExecutor() as executor:
+                future_list = [executor.submit(get_urls, response_page) for response_page in response_page_list]
+                for future in as_completed(future_list):
+                    result = future.result()
+                    if result:
+                        items_url_list += result
+        except Exception as ex:
+            items_url_list.clear()
+            print(f"Exception - {ex}")
     return items_url_list
 
 
 #######################################################################################
 
 
-async def get_item_response(item_url: str, session: ClientSession):
+async def get_item_response(item_url: str, session: ClientSession) -> Union[Any, None]:
     """Возвращает response обьект на product_detail"""
-    async with session.get(item_url) as response:
-        return [item_url, await response.text()]
+    try:
+        async with session.get(item_url) as response:
+            result = await response.text()
+    except Exception as ex:
+        print(f'Exception in get_item_response - item_url: {item_url}\n{ex}')
+        return None
+    else:
+        return [item_url, result]
 
 
-async def get_items_responses(items_url_list: list) -> list:
+async def get_items_response_list(items_url_list: list) -> list:
     """Возвращает список response обьектов на все товары внутри категории"""
     items_response_list = []
     try:
-        try:
-            async with ClientSession() as session:
-                task_list = [get_item_response(item_url, session) for item_url in items_url_list]
-                items_response_list += list(await gather(*task_list))
-        except ClientError as e:
-            print(e)
-    except BaseException as ex:
-        print(ex)
+        async with ClientSession() as session:
+            task_list = [get_item_response(item_url, session) for item_url in items_url_list]
+            result_list = list(await gather(*task_list))
+    except Exception as ex:
+        print(f'Exception - {ex}')
+    else:
+        for result in result_list:
+            if result:
+                items_response_list.append(result)
     return items_response_list
 
 
 #######################################################################################
 
 
-def get_item_data(item_url: str, item_response: str) -> Dict[str, Any]:
-    """Возвращает данные о товаре и загружает его фотографии в path_to_download"""
+def get_item_data(item_url: str, item_response: str) -> Union[Dict[str, Any], None]:
+    """Возвращает данные о товаре"""
     item_data = {}
-    item_html = BS(item_response, 'html.parser')
-    item_data['name'] = get_name(item_html)
-    item_data['slug'] = get_slug(item_url)
-    item_data['description'] = get_description(item_html)
-    item_data['price'] = get_price(item_html)
-    item_data['properties'] = get_properties(item_html)
-    item_data['photos'] = get_photos_urls(item_data['name'], item_html)
-    print(item_data['photos'])
-    return item_data
+    try:
+        item_html = BS(item_response, 'html.parser')
+        item_data['name'] = get_name(item_html)
+        item_data['slug'] = get_slug(item_url)
+        item_data['description'] = get_description(item_html)
+        item_data['price'] = get_price(item_html)
+        item_data['properties'] = get_properties(item_html)
+        item_data['photos'] = get_photos_urls(item_data['name'], item_html)
+    except Exception as ex:
+        print(f'Exception - {ex}')
+        return None
+    else:
+        return item_data
 
 
-async def get_items_data(items_response_list: list, cat_id: int, folder_id: str) -> tuple:
-    """Возврашает список данных о товарах и загружает их фотографии в path_to_download"""
-    items_data = {}
-    google_credentials = google_auth()
+async def get_items_data(items_response_list: list,
+                         cat_id: int,
+                         folder_id: str,
+                         google_credentials: google_auth) -> Tuple[List[dict], List[dict]]:
+    """___"""
 
+    # getting products data
     timer = time()
-    with ProcessPoolExecutor() as executor:
-        future_list = [executor.submit(get_item_data,
-                                       item_url=item[0],
-                                       item_response=item[1],
-                                       ) for item in items_response_list]
-        id_ = 1
-        for future in as_completed(future_list):
-            items_data[id_] = future.result()
-            id_ += 1
+    items_data = {}
+    products_data_list = []
+    try:
+        with ProcessPoolExecutor() as executor:
+            future_list = [executor.submit(get_item_data,
+                                           item_url=item[0],
+                                           item_response=item[1],
+                                           ) for item in items_response_list]
+            id_ = 1
+            for future in as_completed(future_list):
+                result = future.result()
+                if result:
+                    items_data[id_] = result
+                    products_data_list.append(result)
+                    id_ += 1
+    except Exception as ex:
+        items_data.clear()
+        print(f'Exception - {ex}')
     print(f'        Получили данные о {len(items_data)} товарах, время выполнения {time() - timer} сек')
 
+    # getting images in bytes
     timer = time()
-    async with ClientSession() as session:
-        task_list = []
-        for item_id, item in items_data.items():
-            for key, url in item['photos'].items():
-                task_list.append(create_task(get_photo(item_id, key, url, session)))
-        response_list = await gather(*task_list)
-    print(f'        Получили {len(response_list)} изображений, время выполнения {time() - timer} сек')
+    photos_response_list = []
+    try:
+        async with ClientSession() as session:
+            task_list = []
+            for item_id, item in items_data.items():
+                for key, url in item['photos'].items():
+                    task_list.append(create_task(get_photo(item_id, key, url, session)))
+            result_list = list(await gather(*task_list))
+    except Exception as ex:
+        print(f'Exception - {ex}')
+    else:
+        photos_response_list += result_list
+    print(f'        Получили {len(photos_response_list)} изображений, время выполнения {time() - timer} сек')
 
+    # uploading images to Google drive and getting their Google File IDs
     timer = time()
-    with ThreadPoolExecutor() as executor:
-        photos_data = []
-        user_permission = {'type': 'anyone', 'value': 'anyone', 'role': 'reader'}
-        future_list = [executor.submit(google_upload_image,
-                                       item_id=response.get('item_id'),
-                                       key=response.get('key'),
-                                       image=BytesIO(response.get('photo')),
-                                       google_credentials=google_credentials,
-                                       file_metadata={'name': response.get('name'), 'parents': [folder_id]},
-                                       user_permission=user_permission
-                                       ) for response in response_list]
-        for future in as_completed(future_list):
-            result = future.result()
+    photos_id_list = get_photos_id_list(photos_response_list, folder_id, google_credentials)
+    print(f'        Загрузили {len(photos_id_list)} фоток в гугл, время выполнения {time() - timer} сек')
+
+    # replacing image URLs in products with Google File IDs
+    if photos_id_list:
+        for photo in photos_id_list:
+            item_id = photo.get('item_id')
+            key = photo.get('key')
+            fileId = photo.get('fileId')
+            if fileId:
+                items_data[item_id]['photos'][key] = fileId
+            else:
+                items_data[item_id]['photos'].pop(key)
+    else:
+        for photo in photos_id_list:
+            items_data[photo.get('item_id')]['photos'] = {}
+
+    # adding products data to the database
+    timer = time()
+    products_properties = []
+    try:
+        task_list = [create_task(add_product_to_db(data, cat_id))
+                     for item_id, data in items_data.items() if len(data.get('photos')) > 0]
+        result_list = list(await gather(*task_list))
+    except Exception as ex:
+        print(f'Exception - {ex}')
+    else:
+        for result in result_list:
             if result:
-                photos_data.append(result)
-    print(f'        Загрузили {len(photos_data)} фоток в гугл, время выполнения {time() - timer} сек')
+                products_properties.append(result)
+    print(f'        Добавили {len(products_properties)} товаров в базу, время выполнения {time() - timer} сек')
 
-    for photo in photos_data:
-        item_id = photo.get('item_id')
-        key = photo.get('key')
-        fileId = photo.get('fileId')
-        items_data[item_id]['photos'][key] = fileId
-
-    timer = time()
-    task_list = [create_task(add_product_to_db(data, cat_id)) for item_id, data in items_data.items()]
-    items_id_list = await gather(*task_list)
-    print(f'        Добавили {len(items_id_list)} товаров в базу, время выполнения {time() - timer} сек')
-
-    return items_id_list
+    return products_data_list, products_properties
 
 
 #######################################################################################
@@ -282,7 +427,7 @@ def get_name(item_html: BS) -> str:
     try:
         name = item_html.select('h1.product__title-text')[0].text.strip()
     except Exception:
-        return f'Exeption {int(time() * 1000)}'
+        return f'Exception {int(time() * 1000)}'
     else:
         return name
 
@@ -291,12 +436,12 @@ def get_slug(item_url: str) -> str:
     try:
         slug = item_url.split('/')[-1]
     except Exception:
-        return f'exeption_{int(time() * 1000)}'
+        return f'exception_{int(time() * 1000)}'
     else:
         return slug
 
 
-def get_description(item_html: BS) -> str:
+def get_description(item_html: BS) -> Union[str, None]:
     try:
         info = item_html.select('div.product-info__content--description > .product-info__content-section > .text > p')
         if info:
@@ -359,6 +504,10 @@ def get_photos_urls(name: str, item_html: BS) -> Dict[str, str]:
     return photos_url_dict
 
 
+class FolderIdError(Exception):
+    def __init__(self):
+        self.txt = 'Google drive folder not created.'
+
 # async def download_photos(photos_url_dict: Dict[str, str], google_credentials: Credentials) -> Dict[str, str]:
 #     """Запускает потоки и загружает в них фотографии товара"""
 #     photos_id_dict = {}
@@ -386,13 +535,20 @@ def get_photos_urls(name: str, item_html: BS) -> Dict[str, str]:
 
 async def get_photo(item_id: int, key: str, url: str, session: ClientSession):
     """Загружает фотографию"""
-    async with session.get(url) as response:
-        return {'item_id': item_id, 'key': key, "name": url.split('/')[-1], "photo": await response.read()}
+    data = {'item_id': item_id, 'key': key, "name": url.split('/')[-1], "photo": None}
+    try:
+        async with session.get(url) as response:
+            photo = await response.read()
+    except Exception as ex:
+        print(f'Exception in get_photo - item_id: {item_id}, key: {key}, url: {url}\n{ex}')
+    else:
+        data['photo'] = photo
+    return data
 
 
-async def add_properties_data():
+async def add_properties_data(products_properties: List[dict]) -> dict:
     prop_dict = {}
-    for product in PRODUCTS_PROPERTIES:
+    for product in products_properties:
         for name, value in product['properties'].items():
             prop_id = prop_dict.get(name)
             if not prop_id:
@@ -401,6 +557,7 @@ async def add_properties_data():
             await add_value_to_db(product_id=product['prod_id'],
                                   property_id=prop_id,
                                   value=value)
+    return prop_dict
 
 
 if __name__ == '__main__':
@@ -409,20 +566,21 @@ if __name__ == '__main__':
     # google_credentials = google_auth()
     # result = get_item_data(item_url=url, item_response=resp, google_credentials=google_credentials)
     # print(result)
-
-    creds = google_auth()
-    folder_name = f'django_shop.catalog.images {datetime.now()}'
-    # folder_name = 'test_folder'
-    folder_id = google_search_folder(folder_name, creds)
-    if not folder_id:
-        folder_id = google_create_folder(folder_name, creds)
-    PRODUCTS_PROPERTIES = []
-    category_url = 'https://viyar.ua/kv/catalog/moyki_franke/'
-
-    PRODUCTS_PROPERTIES += get_products_data(category_url=category_url, cat_id=1113, folder_id=folder_id)
-    for prop in PRODUCTS_PROPERTIES:
-        print(prop)
-    get_event_loop().run_until_complete(add_properties_data())
+    parser = Parser()
+    parser.run()
+    # creds = google_auth()
+    # folder_name = f'django_shop.catalog.images {datetime.now()}'
+    # # folder_name = 'test_folder'
+    # folder_id = search_folder(folder_name, creds)
+    # if not folder_id:
+    #     folder_id = create_folder(folder_name, creds)
+    # PRODUCTS_PROPERTIES = []
+    # category_url = 'https://viyar.ua/catalog/petli/'
+    #
+    # PRODUCTS_PROPERTIES += get_products_data(category_url=category_url, cat_id=1113, folder_id=folder_id)
+    # timer = time()
+    # properties = get_event_loop().run_until_complete(add_properties_data())
+    # print(f'        Добавили {len(properties)} свойств, время выполнения {time() - timer} сек')
 
     # main_url = 'https://viyar.ua/catalog'
     # data = get_categories_info(main_url)
