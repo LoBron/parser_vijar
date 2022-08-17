@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from os.path import exists
+from time import sleep
 from typing import Dict, Union, List
 
 from google.auth.transport.requests import Request
@@ -12,6 +13,7 @@ from googleapiclient.http import MediaIoBaseUpload
 
 from settings import GOOGLE_CREDENTIALS_NAME
 
+
 def get_photos_id_list(photos_response_list: List[dict],
                        folder_id: str,
                        google_credentials: Credentials
@@ -19,7 +21,7 @@ def get_photos_id_list(photos_response_list: List[dict],
     photos_data_list = []
     if photos_response_list:
         try:
-            with ThreadPoolExecutor(max_workers=40) as executor:
+            with ThreadPoolExecutor(max_workers=50) as executor:
                 user_permission = {'type': 'anyone', 'value': 'anyone', 'role': 'reader'}
                 future_list = [executor.submit(upload_image,
                                                item_id=response.get('item_id'),
@@ -45,17 +47,41 @@ def upload_image(item_id: int,
                  user_permission: Dict[str, str]) -> dict:
     data = {'item_id': item_id, 'key': key, 'fileId': None}
     if image:
-        try:
-            # create gmail api client
-            service = build('drive', 'v3', credentials=google_credentials)
-            media = MediaIoBaseUpload(image, mimetype='image/jpg')
-            file = service.files().create(body=file_metadata, media_body=media).execute()
-            fileId = file.get("id")
-            service.permissions().create(fileId=fileId, body=user_permission).execute()
-        except HttpError as error:  # HttpError
-            print(F'An error occurred: {error}')
-        else:
-            data['fileId'] = fileId
+        # create gmail api client
+        service = build('drive', 'v3', credentials=google_credentials)
+        media = MediaIoBaseUpload(image, mimetype='image/jpg')
+        fileId = None
+        n = 1
+        t = 0.5
+        while n <= 5:
+            try:
+                file = service.files().create(body=file_metadata, media_body=media).execute()
+                fileId = file.get("id")
+            except HttpError as error:
+                if error.resp.status == '403' and error.reason == 'User rate limit exceeded.':
+                    sleep(t)
+                    n += 1
+                    t *= 2
+                else:
+                    break
+            else:
+                break
+        if fileId:
+            n = 1
+            t = 0.5
+            while n <= 5:
+                try:
+                    service.permissions().create(fileId=fileId, body=user_permission).execute()
+                except HttpError as error:
+                    if error.resp.status == '403' and error.reason == 'User rate limit exceeded.':
+                        sleep(t)
+                        n += 1
+                        t *= 2
+                    else:
+                        break
+                else:
+                    data['fileId'] = fileId
+                    break
     return data
 
 

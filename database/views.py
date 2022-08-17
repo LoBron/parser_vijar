@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from database.my_sqlalchemy_mptt import mptt_sessionmaker
 from settings import POSTGRES
-from .models import Cat, Prod, Prop, PropValue
+from .models import Category, Product, Property, PropertyValue
 
 DATABASE = POSTGRES
 database_name = POSTGRES.get('DATABASE_NAME')
@@ -30,9 +30,21 @@ async_engine = create_async_engine(ASYNC_DATABASE_URL, echo=False)
 async_session = sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
 
 
+def clear_all_tables():
+    with Session() as session:
+        session.query(PropertyValue).delete(synchronize_session='fetch')
+        session.commit()
+        session.query(Product).delete(synchronize_session='fetch')
+        session.commit()
+        session.query(Property).delete(synchronize_session='fetch')
+        session.commit()
+        session.query(Category).delete(synchronize_session='fetch')
+        session.commit()
+
+
 def add_category_to_db(cat_data: dict, parent_id: Union[int, None] = None) -> int:
     with Session_mptt() as session:
-        cat = Cat()
+        cat = Category()
         cat.name = cat_data.get('name')
         cat.slug = cat_data.get('slug')
         cat.parent_id = parent_id
@@ -47,7 +59,7 @@ async def add_product_to_db(product_data: dict, cat_id: int) -> Union[dict, None
         try:
             async with async_session() as session:
                 async with session.begin():
-                    prod = Prod()
+                    prod = Product()
                     prod.category_id = cat_id
                     prod.name = product_data['name']
                     prod.slug = product_data['slug']
@@ -73,7 +85,7 @@ async def add_product_to_db(product_data: dict, cat_id: int) -> Union[dict, None
 
 def add_property_to_db(name: str) -> int:
     with Session() as session:
-        prop = Prop()
+        prop = Property()
         prop.name = name
         session.add(prop)
         session.commit()
@@ -83,9 +95,11 @@ def add_property_to_db(name: str) -> int:
 async def add_value_to_db(product_id: int, property_id: int, value: str) -> None:
     async with async_session() as session:
         async with session.begin():
-            prop_value = PropValue()
+            prop_value = PropertyValue()
             prop_value.product_id = product_id
             prop_value.property_id = property_id
             prop_value.value = value
             session.add(prop_value)
         await session.commit()
+
+

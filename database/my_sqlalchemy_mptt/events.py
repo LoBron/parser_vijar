@@ -148,7 +148,7 @@ def mptt_before_delete(mapper, connection, instance, delete=True):
         select(
             [
                 table.c.lft,
-                table.c.rgt
+                table.c.rght ############# add rght
             ]
         ).where(
             table_pk == pk
@@ -180,7 +180,7 @@ def mptt_before_delete(mapper, connection, instance, delete=True):
         connection.execute(
             table.update(
                 and_(
-                    table.c.rgt > rgt,
+                    table.c.rght > rgt, ############# add rght
                     table.c.tree_id == tree_id
                 )
             ).values(
@@ -193,14 +193,14 @@ def mptt_before_delete(mapper, connection, instance, delete=True):
                     ],
                     else_=table.c.lft
                 ),
-                rgt=case(
+                rght=case( ############# add rght
                     [
                         (
-                            table.c.rgt >= rgt,
-                            table.c.rgt - delta
+                            table.c.rght >= rgt, ############# add rght
+                            table.c.rght - delta ############# add rght
                         )
                     ],
-                    else_=table.c.rgt
+                    else_=table.c.rght ############# add rght
                 )
             )
         )
@@ -233,7 +233,7 @@ def mptt_before_update(mapper, connection, instance):
             select(
                 [
                     table.c.lft,
-                    table.c.rgt,
+                    table.c.rght, ############# add rght
                     table.c.parent_id,
                     table.c.level,
                     table.c.tree_id
@@ -246,7 +246,7 @@ def mptt_before_update(mapper, connection, instance):
             select(
                 [
                     table.c.lft,
-                    table.c.rgt,
+                    table.c.rght, ############# add rght
                     table.c.parent_id,
                     table.c.tree_id
                 ]
@@ -286,7 +286,7 @@ def mptt_before_update(mapper, connection, instance):
             select(
                 [
                     table.c.lft,
-                    table.c.rgt,
+                    table.c.rght, ############# add rght
                     table.c.parent_id,
                     table.c.tree_id
                 ]
@@ -312,7 +312,7 @@ def mptt_before_update(mapper, connection, instance):
         .where(
             and_(
                 table.c.lft >= instance.left,
-                table.c.rgt <= instance.right,
+                table.c.rght <= instance.right, ############# add rght
                 table.c.tree_id == instance.tree_id
             )
         ).order_by(
@@ -335,7 +335,7 @@ def mptt_before_update(mapper, connection, instance):
         select(
             [
                 table.c.lft,
-                table.c.rgt,
+                table.c.rght, ############# add rght
                 table.c.tree_id,
                 table.c.parent_id,
                 table.c.level
@@ -365,7 +365,7 @@ def mptt_before_update(mapper, connection, instance):
             select(
                 [
                     table_pk,
-                    table.c.rgt,
+                    table.c.rght, ############# add rght
                     table.c.lft,
                     table.c.tree_id,
                     table.c.level
@@ -395,7 +395,7 @@ def mptt_before_update(mapper, connection, instance):
             select(
                 [
                     table_pk,
-                    table.c.rgt,
+                    table.c.rght, ############# add rght
                     table.c.lft,
                     table.c.tree_id,
                     table.c.level
@@ -460,7 +460,7 @@ def mptt_before_update(mapper, connection, instance):
                 )
             ).values(
                 lft=table.c.lft - node_pos_left + 1,
-                rgt=table.c.rgt - node_pos_left + 1,
+                rgt=table.c.rght - node_pos_left + 1, ############# add rght
                 level=table.c.level - node_level + default_level,
                 tree_id=tree_id
             )
