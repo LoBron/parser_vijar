@@ -1,4 +1,4 @@
-from asyncio import get_event_loop, create_task, gather
+from asyncio import get_event_loop, create_task, gather, new_event_loop, set_event_loop
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from random import choice
 from time import time
@@ -27,6 +27,9 @@ class Parser:
                 raise FolderIdError
         self.__PROPERTIES = {}
         self.data = None
+
+    def replace_category_data(self, cat_id: int):
+        pass
 
     def complete_all_tables(self):
         self._add_categories_data()
@@ -70,14 +73,18 @@ class Parser:
         """
         try:
             s = time()
-            pages_response_list = get_event_loop().run_until_complete(
-                get_pages_response_list(category_url=category_url))
+            loop = new_event_loop()
+            set_event_loop(loop)
+            pages_response_list = loop.run_until_complete(
+                    get_pages_response_list(category_url=category_url))
+            # pages_response_list = get_event_loop().run_until_complete(
+            #     get_pages_response_list(category_url=category_url))
             print(f'     получили responces {len(pages_response_list)} шт')
 
             items_url_list = get_items_url_list(pages_response_list[:])
             print(f'     получили items_urls товаров {len(items_url_list)} шт')
 
-            items_response_list = get_event_loop().run_until_complete(get_items_response_list(items_url_list[:]))
+            items_response_list = get_event_loop().run_until_complete(get_items_response_list(items_url_list[:10]))
             print(f'     получили response_items товаров {len(items_response_list)} шт')
 
             products_data, products_property_list = get_event_loop().run_until_complete(
@@ -88,7 +95,7 @@ class Parser:
 
             return products_data
         except Exception as ex:
-            print(f'Exception in get_products_data - cat_id: {cat_id}, category_url: {category_url}\n{ex}')
+            print(f'Exception in _get_products_data - cat_id: {cat_id}, category_url: {category_url}\n{ex}')
             return []
 
     async def _get_items_data(self, items_response_list: list, cat_id: int) -> tuple:
@@ -666,8 +673,8 @@ if __name__ == '__main__':
     # result = get_item_data(item_url=url, item_response=resp, google_credentials=google_credentials)
     # print(result)
     clear_all_tables()
-    parser = Parser()
-    parser.complete_all_tables()
+    parser = Parser().complete_all_tables()
+
     # creds = google_auth()
     # folder_name = f'django_shop.catalog.images {datetime.now()}'
     # # folder_name = 'test_folder'

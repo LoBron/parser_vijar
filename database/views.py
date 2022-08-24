@@ -30,6 +30,10 @@ async_engine = create_async_engine(ASYNC_DATABASE_URL, echo=False)
 async_session = sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
 
 
+def clear_category(cat_id: int):
+    pass
+
+
 def clear_all_tables():
     with Session() as session:
         session.query(PropertyValue).delete(synchronize_session='fetch')

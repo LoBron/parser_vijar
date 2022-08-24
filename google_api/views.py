@@ -21,7 +21,7 @@ def get_photos_id_list(photos_response_list: List[dict],
     photos_data_list = []
     if photos_response_list:
         try:
-            with ThreadPoolExecutor(max_workers=50) as executor:
+            with ThreadPoolExecutor(max_workers=30) as executor:
                 user_permission = {'type': 'anyone', 'value': 'anyone', 'role': 'reader'}
                 future_list = [executor.submit(upload_image,
                                                item_id=response.get('item_id'),
