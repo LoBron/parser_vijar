@@ -1,3 +1,4 @@
+from asyncio import run, create_task, gather
 from decimal import Decimal
 from random import choice, randint
 from typing import Union
@@ -96,7 +97,7 @@ def add_property_to_db(name: str) -> int:
         return prop.id
 
 
-async def add_value_to_db(product_id: int, property_id: int, value: str) -> None:
+async def add_value_to_db(product_id: int, property_id: int, value: str):
     async with async_session() as session:
         async with session.begin():
             prop_value = PropertyValue()
@@ -104,6 +105,19 @@ async def add_value_to_db(product_id: int, property_id: int, value: str) -> None
             prop_value.property_id = property_id
             prop_value.value = value
             session.add(prop_value)
-        await session.commit()
+            await session.commit()
+        return prop_value.id
 
 
+if __name__ == '__main__':
+    value_list = ['лох', 'пидр', 'хуй', 'чмо']
+
+
+    async def main(value_list):
+        task_list = [create_task(add_value_to_db(73019, 800, value)) for value in value_list]
+        id_list = list(await gather(*task_list))
+        return id_list
+
+
+    id_list = run(main(value_list))
+    print(id_list)
