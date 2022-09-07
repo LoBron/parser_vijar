@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
-from database.views import clear_all_tables
-from utils import Parser
+from persistence.servises import clear_all_tables
+from busines.parser import Parser
 
 app = FastAPI(title='parser_api')
 

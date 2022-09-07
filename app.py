@@ -1,7 +1,7 @@
 from flask import Flask
 
-from database.views import clear_all_tables, clear_category
-from utils import Parser
+from persistence.servises import clear_all_tables, clear_category
+from busines.parser import Parser
 
 app = Flask(__name__)
 
