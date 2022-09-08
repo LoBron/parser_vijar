@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from persistence.servises import clear_all_tables
-from busines.parser import Parser
+from busines.utils import Core
 
 app = FastAPI(title='parser_api')
 
@@ -35,7 +35,7 @@ app = FastAPI(title='parser_api')
 @app.get('/complete_all_tables')
 async def complete_all_tables():
     clear_all_tables()
-    parser = Parser().complete_all_tables()
+    parser = Core().complete_all_tables()
     return {'response': 'all complete'}
 # if __name__ == '__main__':
 #     s = time()

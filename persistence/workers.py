@@ -1,10 +1,11 @@
 from typing import Dict
 
-from .servises.alchemy.views import SyncHandler, AsyncHandler
-from .servises.validators import *
+from .alchemy.handlers import SyncHandler, AsyncHandler
+from .interfaces import DbWorkerInterface
+from .validators import *
 
 
-class DbWorker:
+class DbWorker(DbWorkerInterface):
 
     def __init__(self):
         self.__sync_handler = SyncHandler()
@@ -12,6 +13,9 @@ class DbWorker:
 
     def clear_category(self, cat_id: Category) -> Union[int, None]:
         return self.__sync_handler.clear_category(cat_id.id)
+
+    def complate_category(self, cat_id: Category):
+        pass
 
     def clear_all_tables(self):
         return self.__sync_handler.clear_all_tables()
@@ -27,6 +31,5 @@ class DbWorker:
 
     async def add_value_to_db(self, property_value: PropertyValue) -> Union[int, None]:
         return await self.__async_handler.add_value_to_db(property_value.dict())
-
 
 # if __name__ == '__main__':

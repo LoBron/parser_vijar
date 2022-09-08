@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, DECIMAL
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from persistence.servises.alchemy.mptt import BaseNestedSets
+from persistence.alchemy.mptt import BaseNestedSets
 
 # metadata = MetaData()
 #

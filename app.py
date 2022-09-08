@@ -1,7 +1,6 @@
 from flask import Flask
 
-from persistence.servises import clear_all_tables, clear_category
-from busines.parser import Parser
+from busines import Controller
 
 app = Flask(__name__)
 
@@ -13,15 +12,13 @@ def hello_world():
 
 @app.get('/complete_all_tables')
 def complete_all_tables():
-    clear_all_tables()
-    parser = Parser().complete_all_tables()
+    Controller.create_all_data()
     return {'response': 'all complete'}
 
 
 @app.get('/replace_category/<int:cat_id>')
 def replace_category_data(cat_id: int):
-    clear_category(cat_id)
-    parser = Parser().replace_category_data(cat_id)
+    Controller.update_data_in_category(cat_id)
     return {"cat_id": cat_id}
 
 

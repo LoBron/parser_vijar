@@ -1,6 +1,5 @@
 from asyncio import create_task, gather, run, set_event_loop_policy, WindowsSelectorEventLoopPolicy
 from decimal import Decimal, ROUND_UP
-from random import choice, randint
 from typing import Union, Dict
 
 from sqlalchemy import create_engine
@@ -9,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
 from .mptt import mptt_sessionmaker
-from persistence.servises.validators import Product
+from persistence.validators import Product
 
 from settings import POSTGRES
 from .models import CategoryTable, ProductTable, PropertyTable, PropertyValueTable
