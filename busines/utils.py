@@ -38,60 +38,39 @@ class Core:
     def add_categories_data(self) -> None:
         """Возвращает список с данными(словарями) о категориях"""
         response_obj = self.__io_loader.get_item_response(self.__main_url)
-        html_page = BS(response_obj.content, 'html.parser')
-        item_0_list = html_page.select('.dropdown__list-item_lev1')
+        categories_data = self.__html_parser.get_categories_data(response_obj.content, self.__main_url)
+        for cat_0 in categories_data:
+            category = Category(name=cat_0.get('name'),
+                                slug=cat_0.get('slug'),
+                                have_childrens=True if cat_0.get('childrens') else False)
+            cat_id_0 = self.__db_worker.add_category_to_db(category)
+            category.id = cat_id_0
+            self.__db_worker.save_category_info(category)
+            self.__CATEGORIES.append(category)
 
-        for item_0 in item_0_list[:8]:  # item_0_list[:8] #####################
-            cat_0_name = item_0.select('a > .text')[0].text
-            cat_0_slug = item_0.select('a')[0].get('href').split('/')[-2]
-            if cat_0_name in ['Фасады', 'Фасади']:
-                continue
-            else:
-                name = cat_0_name
-                slug = cat_0_slug
-                cat_0_childrens = item_0.select('.li_lev2')
-                category = Category(name=name,
-                                    slug=slug,
-                                    have_childrens=True if len(cat_0_childrens) > 0 else False)
-                cat_id_0 = self.__db_worker.add_category_to_db(category)
-                category.id = cat_id_0
+            categories_1 = cat_0.get('childrens')
+            for cat_1 in categories_1:
+                category = Category(name=cat_1.get('name'),
+                                    slug=cat_1.get('slug'),
+                                    url=cat_1.get('url'),
+                                    parent_id=cat_id_0,
+                                    have_childrens=True if cat_1.get('childrens') else False)
+                cat_id_1 = self.__db_worker.add_category_to_db(category)
+                category.id = cat_id_1
+                self.__db_worker.save_category_info(category)
                 self.__CATEGORIES.append(category)
 
-                for item_1 in cat_0_childrens[:]:  # cat_0_childrens[:] #####################
-                    links_1 = item_1.find_all('a')
-                    name = links_1[0].text.strip()
-                    if name in ['Мойки из искусственного камня  Belterno', 'Мийки зі штучного каменю  Belterno']:
-                        continue
-                    else:
-                        href_list_1 = links_1[0]["href"].split("/")
-                        href = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
-                        url = self.__main_url[:-8] + href
-                        slug = href.split('/')[-2]
-                        cat_1_childrens = item_1.select('.dropdown__list-item')
-                        category = Category(name=name,
-                                            slug=slug,
-                                            parent_id=cat_id_0,
-                                            have_childrens=True if len(cat_1_childrens) > 0 else False,
-                                            url=url)
-                        cat_id_1 = self.__db_worker.add_category_to_db(category)
-                        category.id = cat_id_1
+                categories_2 = cat_1.get('childrens')
+                if categories_2:
+                    for cat_2 in categories_2:
+                        category = Category(name=cat_2.get('name'),
+                                            slug=cat_2.get('slug'),
+                                            url=cat_2.get('url'),
+                                            parent_id=cat_id_1)
+                        cat_id_2 = self.__db_worker.add_category_to_db(category)
+                        category.id = cat_id_2
+                        self.__db_worker.save_category_info(category)
                         self.__CATEGORIES.append(category)
-
-                        if len(cat_1_childrens) > 0:
-                            for item_2 in cat_1_childrens[:]:  # cat_1_childrens[:] #####################
-                                links_2 = item_2.find_all('a')
-                                name = links_2[0].text.strip()
-                                href_list_2 = links_2[0]["href"].split("/")
-                                href = f'/{href_list_2[-3]}/{href_list_2[-2]}/'
-                                url = self.__main_url[:-8] + href
-                                slug = href.split('/')[-2]
-                                category = Category(name=name,
-                                                    slug=slug,
-                                                    parent_id=cat_id_1,
-                                                    url=url)
-                                cat_id_2 = self.__db_worker.add_category_to_db(category)
-                                category.id = cat_id_2
-                                self.__CATEGORIES.append(category)
         print(f'\nCписок с данными о {len(self.__CATEGORIES)} категориях создан\n')
 
     def add_products_data(self) -> None:

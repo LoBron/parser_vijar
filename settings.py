@@ -16,3 +16,8 @@ POSTGRES = {
     'HOST': 'localhost',
     'PORT': '5432',
 }
+
+SQLITE = {
+    'FOLDER_NAME': 'project_data',
+    'DB_NAME': 'categories_data.db',
+}

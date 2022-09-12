@@ -1,5 +1,5 @@
 from random import choice
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from time import time
 
 from bs4 import BeautifulSoup as BS
@@ -26,6 +26,56 @@ class HTMLParser(ParserInterface):
             return None
         else:
             return item_data
+
+    @staticmethod
+    def get_categories_data(response: bytes, main_url: str) -> List[Dict[str, Union[str, list]]]:
+
+        categories_data = []
+        html_page = BS(response, 'html.parser')
+        item_0_list = html_page.select('.dropdown__list-item_lev1')
+
+        for item_0 in item_0_list[:8]:  # item_0_list[:8] #####################
+            cat_0_name = item_0.select('a > .text')[0].text
+            cat_0_slug = item_0.select('a')[0].get('href').split('/')[-2]
+            if cat_0_name in ['Фасады', 'Фасади']:
+                continue
+            else:
+                cat_0 = {'name': cat_0_name,
+                         'slug': cat_0_slug}
+
+                cat_0_childrens = item_0.select('.li_lev2')
+                for item_1 in cat_0_childrens[:]:  # cat_0_childrens[:] #####################
+                    links_1 = item_1.find_all('a')
+                    cat_1_name = links_1[0].text.strip()
+                    if cat_1_name in ['Мойки из искусственного камня  Belterno', 'Мийки зі штучного каменю  Belterno']:
+                        continue
+                    else:
+                        href_list_1 = links_1[0]["href"].split("/")
+                        href = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
+                        cat_1 = {'name': cat_1_name,
+                                 'slug': href.split('/')[-2],
+                                 'url': main_url[:-8] + href}
+
+                        cat_1_childrens = item_1.select('.dropdown__list-item')
+                        if len(cat_1_childrens) > 0:
+                            for item_2 in cat_1_childrens[:]:  # cat_1_childrens[:] #####################
+                                links_2 = item_2.find_all('a')
+                                cat_2_name = links_2[0].text.strip()
+                                href_list_2 = links_2[0]["href"].split("/")
+                                href = f'/{href_list_2[-3]}/{href_list_2[-2]}/'
+                                cat_2 = {'name': cat_2_name,
+                                         'slug': href.split('/')[-2],
+                                         'url': main_url[:-8] + href}
+                                if cat_1.get('childrens'):
+                                    cat_1['childrens'].append(cat_2)
+                                else:
+                                    cat_1['childrens'] = [cat_2]
+                        if cat_0.get('childrens'):
+                            cat_0['childrens'].append(cat_1)
+                        else:
+                            cat_0['childrens'] = [cat_1]
+                categories_data.append(cat_0)
+        return categories_data
 
     @staticmethod
     def get_amount_pages(response_page: str) -> int:

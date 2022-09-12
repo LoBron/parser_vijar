@@ -33,3 +33,7 @@ class DbWorkerInterface(ABC):
     @abstractmethod
     async def add_value_to_db(self, property_value: PropertyValue) -> Optional[int]:
         pass
+
+    @abstractmethod
+    def save_category_info(self, category: Category):
+        pass

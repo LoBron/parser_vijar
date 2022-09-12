@@ -31,10 +31,10 @@ from persistence.alchemy.mptt import BaseNestedSets
 #              )
 
 
-Base = declarative_base()
+PostgresBase = declarative_base()
 
 
-class CategoryTable(Base, BaseNestedSets):
+class CategoryTable(PostgresBase, BaseNestedSets):
     __tablename__ = 'catalog_category'
     id = Column(Integer(), primary_key=True, autoincrement=True)
     name = Column(String(50))
@@ -42,7 +42,7 @@ class CategoryTable(Base, BaseNestedSets):
     products = relationship("ProductTable")
 
 
-class PropertyValueTable(Base):
+class PropertyValueTable(PostgresBase):
     __tablename__ = 'catalog_propertyvalue'
     id = Column(Integer, primary_key=True, autoincrement=True)
     product_id = Column(Integer(), ForeignKey("catalog_product.id"))
@@ -50,7 +50,7 @@ class PropertyValueTable(Base):
     value = Column(String(200))
 
 
-class ProductTable(Base):
+class ProductTable(PostgresBase):
     __tablename__ = 'catalog_product'
     id = Column(Integer, primary_key=True, autoincrement=True)
     category_id = Column(Integer, ForeignKey("catalog_category.id"))
@@ -67,10 +67,19 @@ class ProductTable(Base):
     properties = relationship("PropertyValueTable", backref="catalog_product")
 
 
-class PropertyTable(Base):
+class PropertyTable(PostgresBase):
     __tablename__ = 'catalog_property'
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(200), unique=True)
     products = relationship("PropertyValueTable", backref="catalog_property")
 
 
+SQLiteBase = declarative_base()
+
+
+class CategoryInfoTable(SQLiteBase, BaseNestedSets):
+    __tablename__ = 'category'
+    id = Column(Integer(), primary_key=True, autoincrement=True)
+    name = Column(String(50))
+    url = Column(String(200), unique=True)
+    cat_id = Column(Integer, unique=True)

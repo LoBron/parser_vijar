@@ -1,32 +1,32 @@
 from decimal import Decimal
 from random import choice, randint
-from typing import Union, List
+from typing import Union, List, Optional
 
 from pydantic import BaseModel, HttpUrl
 
 
 class Category(BaseModel):
-    id: Union[int, None] = None
-    parent_id: Union[int, None] = None
+    id: Optional[int] = None
+    parent_id: Optional[int] = None
     have_childrens: bool = False
     name: str
     slug: str
-    url: Union[HttpUrl, None] = None
+    url: Optional[HttpUrl] = None
 
 
 class Product(BaseModel):
-    id: Union[int, None] = None
+    id: Optional[int] = None
     category_id: int
     name: str
     slug: str
-    description: Union[str, None] = None
+    description: Optional[str] = None
     price: Decimal = 0
     availability: bool = choice([True] * 9 + [False])
     amount: int = randint(1, 100) if availability else 0
     photo1: str
-    photo2: Union[str, None] = None
-    photo3: Union[str, None] = None
-    photo4: Union[str, None] = None
+    photo2: Optional[str] = None
+    photo3: Optional[str] = None
+    photo4: Optional[str] = None
 
     class Config:
         arbitrary_types_allowed = True

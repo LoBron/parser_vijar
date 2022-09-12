@@ -23,4 +23,5 @@ def replace_category_data(cat_id: int):
 
 
 if __name__ == '__main__':
-    app.run('localhost', 5555, debug=True)
+    # app.run('localhost', 5555, debug=True)
+    Controller.create_all_data()

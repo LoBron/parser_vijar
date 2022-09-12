@@ -23,7 +23,7 @@ host = DATABASE.get('HOST')
 port = DATABASE.get('PORT')
 
 
-class AsyncHandler:
+class PostgresAsyncHandler:
 
     def __init__(self):
         self.__url = f'postgresql+{async_driver}://{user}:{password}@{host}:{port}/{database_name}'
@@ -56,7 +56,7 @@ class AsyncHandler:
             return value.id
 
 
-class SyncHandler:
+class PostgresHandler:
 
     def __init__(self):
         self.__url = f'postgresql+{driver}://{user}:{password}@{host}:{port}/{database_name}'
@@ -95,44 +95,3 @@ class SyncHandler:
 
     def clear_category(self, cat_id: int):
         pass
-
-
-if __name__ == '__main__':
-    value_list = ['лох', 'пидр', 'хуй', 'чмо']
-
-    property_id = 1177
-    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
-    handler = AsyncHandler()
-
-
-    async def main_1():
-        task_list = []
-        key = 1
-        product = Product(category_id=33184,
-                          name='rewgrewgrew312gr1egewr',
-                          slug='wg1fgghg213gwdfb',
-                          description='Создайте свои очереди в своей сопрограмме верхнего уровня run()и либо передайте их сопрограммам, которым они нужны, либо используйте contextvars.ContextVarобъекты , если вы должны использовать глобальные переменные.',
-                          price=Decimal(13234.53).quantize(Decimal('.01'), rounding=ROUND_UP),
-                          photo1='wdqwdasdasdasda2sdasd',
-                          photo2=None,
-                          photo3=None,
-                          photo4=None)
-        task_list.append(create_task(handler.add_product_to_db(key, product.dict())))
-        id_list = list(await gather(*task_list))
-        return id_list
-
-
-    async def main(id_list: list, value_list):
-        task_list = [create_task(handler.add_value_to_db({'product_id': id_list[0],
-                                                          'property_id': property_id,
-                                                          'value': value})) for value in value_list]
-        id_list = list(await gather(*task_list))
-        return id_list
-
-
-    #
-    #
-    items_id_list = run(main_1())
-    print(items_id_list)
-    id_list = run(main(items_id_list, value_list))
-    print(id_list)
