@@ -1,7 +1,7 @@
 from io import BytesIO
 from os.path import exists
 from time import sleep
-from typing import Union, Dict
+from typing import Union, Dict, Optional, List
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -28,7 +28,7 @@ class DriveAPI:
             if not self.__folder_id:
                 raise FolderIdError
 
-    def _search_folder(self, folder_name: str) -> Union[str, None]:
+    def _search_folder(self, folder_name: str) -> Optional[str]:
         """Search folder in drive location
         Load pre-authorized user credentials from the environment.
         TODO(developer) - See https://developers.google.com/identity
@@ -60,7 +60,7 @@ class DriveAPI:
             print(F'An error occurred: {error}')
         return folder_id
 
-    def _create_folder(self, folder_name: str) -> Union[str, None]:
+    def _create_folder(self, folder_name: str) -> Optional[str]:
         """ Create a folder and prints the folder ID
         Returns : Folder Id
 
@@ -87,7 +87,7 @@ class DriveAPI:
 
         return folder_id
 
-    def search_files(self, category_id: Union[int, None] = None):
+    def search_files(self, category_id: Union[int, None] = None) -> List[str]:
         """Search file in drive location
 
         Load pre-authorized user credentials from the environment.
@@ -118,10 +118,10 @@ class DriveAPI:
             print(F'An error occurred: {error}')
         return files
 
-    def delete_file(self, file_id: str) -> Union[str, None]:
+    def delete_file(self, file_id: str) -> Optional[str]:
         return file_id
 
-    def upload_file(self, id_: int, data: BytesIO, name: str, mimetype: str) -> Dict[int, Union[str, None]]:
+    def upload_file(self, id_: int, data: BytesIO, name: str, mimetype: str) -> Dict[int, Optional[str]]:
         fileId = {id_: None}
         # create gmail api client
         file_metadata = {'name': name, 'parents': [self.__folder_id]}
@@ -164,7 +164,7 @@ class DriveAPI:
         return fileId
 
     @staticmethod
-    def _google_auth() -> Union[Credentials, None]:
+    def _google_auth() -> Optional[Credentials]:
         """Shows basic usage of the Drive v3 API.
           Prints the names and ids of the first 10 files the user has access to.
           """

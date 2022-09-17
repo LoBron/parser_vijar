@@ -37,4 +37,8 @@ class DbWorker(DbWorkerInterface):
     def save_category_info(self, category: Category):
         return self.__sl_handler.save_category_info(category.dict())
 
+    def delete_category_info(self) -> None:
+        return self.__sl_handler.delete_category_info()
+
+
 # if __name__ == '__main__':

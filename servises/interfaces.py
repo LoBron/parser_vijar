@@ -1,5 +1,7 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from abc import ABC, abstractmethod
+
+from requests import Response
 
 from .models import *
 
@@ -7,15 +9,15 @@ from .models import *
 class IoLoaderInterface(ABC):
 
     @abstractmethod
-    def get_html_responses(self, urls: Dict[int, str]) -> Dict[int, list]:
+    def get_html_responses(self, urls: Dict[int, str]) -> Dict[int, Tuple[str, str]]:
         pass
 
     @abstractmethod
-    def get_bytes_responses(self, urls: Dict[int, str]) -> Dict[int, list]:
+    def get_bytes_responses(self, urls: Dict[int, str]) -> Dict[int, Tuple[str, bytes]]:
         pass
 
     @abstractmethod
-    def get_item_response(self, item_url: str):
+    def get_item_response(self, item_url: str) -> Tuple[str, Optional[Response]]:
         pass
 
 

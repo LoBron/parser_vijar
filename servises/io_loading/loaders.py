@@ -1,14 +1,17 @@
 from asyncio import gather, create_task
-from typing import Dict
+from typing import Dict, Optional, Tuple, Union
 
 from aiohttp import ClientSession
-from requests import get
+from requests import get, Response
 
 
 class AsyncLoader:
 
     @classmethod
-    async def get_responses(cls, urls: Dict[int, str], format_: str = 'bytes') -> Dict[int, list]:
+    async def get_responses(cls,
+                            urls: Dict[int, str],
+                            format_: str = 'bytes'
+                            ) -> Dict[int, Tuple[str, Union[str, bytes]]]:
         """Возвращает словарь response обьектов"""
         responses = {}
         if urls:
@@ -28,7 +31,7 @@ class AsyncLoader:
     async def _get_item_response(item_url: str,
                                  session: ClientSession,
                                  key: int,
-                                 format_: str = 'bytes') -> Dict[int, list]:
+                                 format_: str = 'bytes') -> Dict[int, Tuple[str, Union[str, bytes]]]:
         """Возвращает response обьект"""
         n = 1
         while True:
@@ -46,13 +49,13 @@ class AsyncLoader:
                     break
             else:
                 break
-        return {key: [item_url, result]}
+        return {key: (item_url, result)}
 
 
 class SyncLoader:
 
     @staticmethod
-    def get_item_response(item_url: str) -> list:
+    def get_item_response(item_url: str) -> Tuple[str, Optional[Response]]:
         n = 1
         while True:
             try:
@@ -65,4 +68,4 @@ class SyncLoader:
                     break
             else:
                 break
-        return [item_url, data]
+        return item_url, data

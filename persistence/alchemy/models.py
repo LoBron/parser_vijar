@@ -77,7 +77,7 @@ class PropertyTable(PostgresBase):
 SQLiteBase = declarative_base()
 
 
-class CategoryInfoTable(SQLiteBase, BaseNestedSets):
+class CategoryInfoTable(SQLiteBase):
     __tablename__ = 'category'
     id = Column(Integer(), primary_key=True, autoincrement=True)
     name = Column(String(50))

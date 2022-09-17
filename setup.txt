@@ -1,13 +1,15 @@
+CREATE
 docker run --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=1 -d postgres
 
+CONNECT TO CONTAINER
 docker exec -it postgres bash
+psql -U postgres -h localhost -W
 
-# psql -U postgres -h localhost -W
+CREATE DATABASE
+postgres=# create database catalog;
+postgres=# grant all privileges on database catalog to postgres;
 
-postgres=# create database test;
+\c catalog
 
-postgres=# grant all privileges on database test to postgres;
-
-\c test
-
-postgres=# DROP DATABASE test;
+DELETE DATABASE
+postgres=# DROP DATABASE catalog;

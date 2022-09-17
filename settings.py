@@ -8,7 +8,7 @@ GOOGLE_CREDENTIALS_NAME = 'credentials.json'
 GOOGLE_SCOPES = ['https://www.googleapis.com/auth/drive']
 
 POSTGRES = {
-    'DATABASE_NAME': 'test',
+    'DATABASE_NAME': 'catalog',
     'USERNAME': 'postgres',
     'PASSWORD': '1',
     'DRIVER': 'psycopg2',

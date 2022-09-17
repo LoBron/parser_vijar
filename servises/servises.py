@@ -1,5 +1,7 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from asyncio import run
+
+from requests import Response
 
 from .interfaces import IoLoaderInterface, GoogleWorkerInterface
 from .models import *
@@ -12,13 +14,13 @@ class IoLoader(IoLoaderInterface):
         self.__async_loader = AsyncLoader
         self.__sync_loader = SyncLoader
 
-    def get_html_responses(self, urls: Dict[int, str]) -> Dict[int, list]:
+    def get_html_responses(self, urls: Dict[int, str]) -> Dict[int, Tuple[str, str]]:
         return run(self.__async_loader.get_responses(urls, format_='text'))
 
-    def get_bytes_responses(self, urls: Dict[int, str]) -> Dict[int, list]:
+    def get_bytes_responses(self, urls: Dict[int, str]) -> Dict[int, Tuple[str, bytes]]:
         return run(self.__async_loader.get_responses(urls, format_='bytes'))
 
-    def get_item_response(self, item_url: str):
+    def get_item_response(self, item_url: str) -> Tuple[str, Optional[Response]]:
         return self.__sync_loader.get_item_response(item_url)
 
 

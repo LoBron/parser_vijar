@@ -37,3 +37,7 @@ class DbWorkerInterface(ABC):
     @abstractmethod
     def save_category_info(self, category: Category):
         pass
+
+    @abstractmethod
+    def delete_category_info(self):
+        pass

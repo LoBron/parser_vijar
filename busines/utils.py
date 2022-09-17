@@ -2,7 +2,6 @@ from asyncio import create_task, gather, run, set_event_loop_policy, WindowsSele
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from decimal import Decimal, ROUND_UP
 from io import BytesIO
-from time import time
 from typing import List, Dict, Tuple
 
 from .parser import HTMLParser
@@ -24,53 +23,54 @@ class Core:
                  html_parser: ParserInterface = HTMLParser(),
                  ):
         self.__main_url = MAIN_URL
-        self.__google_worker = google_worker
-        self.__db_worker = db_worker
-        self.__io_loader = io_loader
-        self.__html_parser = html_parser
+        self._google_worker = google_worker
+        self._db_worker = db_worker
+        self._io_loader = io_loader
+        self._html_parser = html_parser
+        self._objects_in_db = {}
         self.__CATEGORIES = []
         self.__PRODUCTS = []
         self.__PROPERTIES = {}
         self.__VALUES = []
-        self.objects_in_db = {}
         set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
     def add_categories_data(self) -> None:
         """Возвращает список с данными(словарями) о категориях"""
-        response_obj = self.__io_loader.get_item_response(self.__main_url)
-        categories_data = self.__html_parser.get_categories_data(response_obj.content, self.__main_url)
+        response_obj = self._io_loader.get_item_response(self.__main_url)
+        categories_data = self._html_parser.get_categories_data(response_obj[1].content, self.__main_url)
         for cat_0 in categories_data:
             category = Category(name=cat_0.get('name'),
                                 slug=cat_0.get('slug'),
                                 have_childrens=True if cat_0.get('childrens') else False)
-            cat_id_0 = self.__db_worker.add_category_to_db(category)
+            cat_id_0 = self._db_worker.add_category_to_db(category)
             category.id = cat_id_0
-            self.__db_worker.save_category_info(category)
+            self._db_worker.save_category_info(category)
             self.__CATEGORIES.append(category)
 
             categories_1 = cat_0.get('childrens')
-            for cat_1 in categories_1:
-                category = Category(name=cat_1.get('name'),
-                                    slug=cat_1.get('slug'),
-                                    url=cat_1.get('url'),
-                                    parent_id=cat_id_0,
-                                    have_childrens=True if cat_1.get('childrens') else False)
-                cat_id_1 = self.__db_worker.add_category_to_db(category)
-                category.id = cat_id_1
-                self.__db_worker.save_category_info(category)
-                self.__CATEGORIES.append(category)
+            if categories_1:
+                for cat_1 in categories_1:
+                    category = Category(name=cat_1.get('name'),
+                                        slug=cat_1.get('slug'),
+                                        url=cat_1.get('url'),
+                                        parent_id=cat_id_0,
+                                        have_childrens=True if cat_1.get('childrens') else False)
+                    cat_id_1 = self._db_worker.add_category_to_db(category)
+                    category.id = cat_id_1
+                    self._db_worker.save_category_info(category)
+                    self.__CATEGORIES.append(category)
 
-                categories_2 = cat_1.get('childrens')
-                if categories_2:
-                    for cat_2 in categories_2:
-                        category = Category(name=cat_2.get('name'),
-                                            slug=cat_2.get('slug'),
-                                            url=cat_2.get('url'),
-                                            parent_id=cat_id_1)
-                        cat_id_2 = self.__db_worker.add_category_to_db(category)
-                        category.id = cat_id_2
-                        self.__db_worker.save_category_info(category)
-                        self.__CATEGORIES.append(category)
+                    categories_2 = cat_1.get('childrens')
+                    if categories_2:
+                        for cat_2 in categories_2:
+                            category = Category(name=cat_2.get('name'),
+                                                slug=cat_2.get('slug'),
+                                                url=cat_2.get('url'),
+                                                parent_id=cat_id_1)
+                            cat_id_2 = self._db_worker.add_category_to_db(category)
+                            category.id = cat_id_2
+                            self._db_worker.save_category_info(category)
+                            self.__CATEGORIES.append(category)
         print(f'\nCписок с данными о {len(self.__CATEGORIES)} категориях создан\n')
 
     def add_products_data(self) -> None:
@@ -85,7 +85,7 @@ class Core:
                     products = []
                     for product in products_properties:
                         products.append(product.get('product_id'))
-                    self.objects_in_db[category.id] = products
+                    self._objects_in_db[category.id] = products
 
                     run(self._add_properties_data(products_properties))
 
@@ -99,13 +99,13 @@ class Core:
                     for name, value in product['properties'].items():
                         prop_id = self.__PROPERTIES.get(name)
                         if not prop_id:
-                            prop_id = self.__db_worker.add_property_to_db(name)
+                            prop_id = self._db_worker.add_property_to_db(name)
                             self.__PROPERTIES[name] = prop_id
                             count_properties += 1
                         task_list.append(create_task(
-                            self.__db_worker.add_value_to_db(PropertyValue(product_id=product.get('product_id'),
-                                                                           property_id=prop_id,
-                                                                           value=value))))
+                            self._db_worker.add_value_to_db(PropertyValue(product_id=product.get('product_id'),
+                                                                          property_id=prop_id,
+                                                                          value=value))))
                 result_list = list(await gather(*task_list))
             except Exception as ex:
                 print(f'Exception in _add_properties_data\n{ex}')
@@ -122,11 +122,10 @@ class Core:
         category_url format - 'https://viyar.ua/catalog/ruchki_mebelnye/'
         """
         try:
-            s = time()
             pages_response_list = self._get_pages_response_list(category_url=category_url)
             print(f'     получили responces {len(pages_response_list)} шт')
 
-            products_url_list = self._get_items_url_list(pages_response_list[:])
+            products_url_list = self._get_items_url_list(pages_response_list[:1])
             print(f'     получили items_urls товаров {len(products_url_list)} шт')
 
             products_response_list = self._get_items_responses(products_url_list[:])
@@ -174,9 +173,9 @@ class Core:
         """
         pages_response_list = []
         try:
-            response_page = self.__io_loader.get_item_response(category_url).text
+            response_page = self._io_loader.get_item_response(category_url)[1].text
             pages_response_list.append(response_page)
-            amount_pages = self.__html_parser.get_amount_pages(response_page)
+            amount_pages = self._html_parser.get_amount_pages(response_page)
             if amount_pages == 0:
                 return pages_response_list
             else:
@@ -185,7 +184,7 @@ class Core:
                 for number_page in range(2, amount_pages + 1):  # range(2, amount_pages + 1):
                     urls[key] = f'{category_url}page-{number_page}'
                     key += 1
-                responses = self.__io_loader.get_html_responses(urls)
+                responses = self._io_loader.get_html_responses(urls)
                 for resp in responses.values():
                     if resp[1]:
                         pages_response_list.append(resp[1])
@@ -206,7 +205,7 @@ class Core:
                         photos_response_list.append({'id': c, 'item_id': item_id, 'key': key, 'url': url})
                         urls[c] = url
                         c += 1
-                result_dict = self.__io_loader.get_bytes_responses(urls)
+                result_dict = self._io_loader.get_bytes_responses(urls)
             except Exception as ex:
                 print(f'Exception in _get_photos_response_list - Error: {ex}')
             else:
@@ -218,7 +217,7 @@ class Core:
                         counter += 1
         return counter, photos_response_list
 
-    def _get_photos_id_list(self, photos_response_list: List[dict]) -> tuple:
+    def _get_photos_id_list(self, photos_response_list: List[dict]) -> Tuple[int, List[dict]]:
         photos_id_list = []
         counter = 0
         if photos_response_list:
@@ -237,7 +236,7 @@ class Core:
                     c += 1
                 result_dict = {}
                 with ThreadPoolExecutor(max_workers=30) as executor:
-                    future_list = [executor.submit(self.__google_worker.upload_file,
+                    future_list = [executor.submit(self._google_worker.upload_file,
                                                    image[0],
                                                    image[1]
                                                    ) for image in images]
@@ -279,7 +278,7 @@ class Core:
                         products_property_list.append({'key': key,
                                                        'properties': item.get('properties'),
                                                        'product': product})
-                        task_list.append(create_task(self.__db_worker.add_product_to_db(key, product)))
+                        task_list.append(create_task(self._db_worker.add_product_to_db(key, product)))
                         key += 1
                 result_list = list(await gather(*task_list))
             except Exception as ex:
@@ -299,14 +298,14 @@ class Core:
                         products_property_list.pop(i)
         return products_property_list
 
-    def _get_items_responses(self, products_url_list: List[str]) -> List[list]:
+    def _get_items_responses(self, products_url_list: List[str]) -> List[Tuple[str, bytes]]:
         items_responses = []
         if products_url_list:
             try:
                 urls_dict = {}
                 for key in range(len(products_url_list)):
                     urls_dict[key] = products_url_list[key]
-                result = self.__io_loader.get_bytes_responses(urls_dict)
+                result = self._io_loader.get_bytes_responses(urls_dict)
             except Exception as ex:
                 print(f'Exception in _get_items_responses - Error: {ex}')
             else:
@@ -320,14 +319,12 @@ class Core:
         if items_response_list:
             id_ = 1
             for response in items_response_list:
-                data = self.__html_parser.get_item_data(item_url=response[0], item_response=response[1])
+                data = self._html_parser.get_item_data(item_url=response[0], item_response=response[1])
                 if data:
                     items_data[id_] = data
                     id_ += 1
                     products_data.append(data)
         return items_data, products_data
-
-    ######################################################################################
 
     def _get_items_url_list(self, response_page_list: List[str]) -> List[str]:
         """Возвращает список URL адресов всех товаров внутри категории"""
@@ -335,7 +332,7 @@ class Core:
         if response_page_list:
             try:
                 for response_page in response_page_list:
-                    urls = self.__html_parser.get_items_urls(response_page)
+                    urls = self._html_parser.get_items_urls(response_page)
                     if urls:
                         items_url_list += urls
             except Exception as ex:
@@ -347,10 +344,11 @@ class Core:
 class Creator(CreatorInterface, Core):
 
     def create_all_data(self) -> Dict[int, List[int]]:
-        self.__db_worker.clear_all_tables()
+        self._db_worker.clear_all_tables()
+        self._db_worker.delete_category_info()
         self.add_categories_data()
         self.add_products_data()
-        return self.objects_in_db
+        return self._objects_in_db
 
 
 class Updater(UpdaterInterface, Core):
