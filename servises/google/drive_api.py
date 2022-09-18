@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from io import BytesIO
 from os.path import exists
 from time import sleep

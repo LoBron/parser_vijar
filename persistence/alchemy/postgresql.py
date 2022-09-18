@@ -1,6 +1,6 @@
 from asyncio import create_task, gather, run, set_event_loop_policy, WindowsSelectorEventLoopPolicy
 from decimal import Decimal, ROUND_UP
-from typing import Union, Dict
+from typing import Union, Dict, Optional
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -27,10 +27,10 @@ class PostgresAsyncHandler:
 
     def __init__(self):
         self.__url = f'postgresql+{async_driver}://{user}:{password}@{host}:{port}/{database_name}'
-        self.__engine = create_async_engine(self.__url, poolclass=NullPool, echo=False)
+        self.__engine = create_async_engine(self.__url, poolclass=NullPool, echo=True)
         self.__session = sessionmaker(self.__engine, expire_on_commit=False, class_=AsyncSession)
 
-    async def add_product_to_db(self, key: int, product: dict) -> Union[Dict[int, int], None]:
+    async def add_product_to_db(self, key: int, product: dict) -> Optional[Dict[int, int]]:
         try:
             async with self.__session() as session:
                 prod = ProductTable(**product)
@@ -43,17 +43,17 @@ class PostgresAsyncHandler:
             data = {key: prod.id}
         return data
 
-    async def add_value_to_db(self, property_value: dict) -> Union[int, None]:
-        try:
-            async with self.__session() as session:
-                value = PropertyValueTable(**property_value)
-                session.add(value)
-                await session.commit()
-        except Exception as ex:
-            print(f'Exception in add_value_to_db - data: {property_value}\n{ex}')
-            return None
-        else:
-            return value.id
+    async def add_value_to_db(self, property_value: dict) -> Optional[int]:
+        # try:
+        async with self.__session() as session:
+            value = PropertyValueTable(**property_value)
+            session.add(value)
+            await session.commit()
+        # except Exception as ex:
+        #     print(f'Exception in add_value_to_db - data: {property_value}\n{ex}')
+        #     return None
+        # else:
+        return value.id
 
 
 class PostgresHandler:
