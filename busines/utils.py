@@ -87,14 +87,14 @@ class Core:
                         products.append(product.get('product_id'))
                     self._objects_in_db[category.id] = products
 
-                    run(self._add_properties_data(products_properties))
+                    self._add_properties_data(products_properties)
 
-    async def _add_properties_data(self, products_properties: List[dict]) -> None:
+    def _add_properties_data(self, products_properties: List[dict]) -> None:
         count_properties = 0
         count_values = 0
         if products_properties:
             try:
-                task_list = []
+                value_list = []
                 for product in products_properties:
                     for name, value in product['properties'].items():
                         prop_id = self.__PROPERTIES.get(name)
@@ -102,11 +102,18 @@ class Core:
                             prop_id = self._db_worker.add_property_to_db(name)
                             self.__PROPERTIES[name] = prop_id
                             count_properties += 1
-                        task_list.append(create_task(
-                            self._db_worker.add_value_to_db(PropertyValue(product_id=product.get('product_id'),
-                                                                          property_id=prop_id,
-                                                                          value=value))))
-                result_list = list(await gather(*task_list))
+                        value_list.append(PropertyValue(product_id=product.get('product_id'),
+                                                        property_id=prop_id,
+                                                        value=value))
+                        # await self._db_worker.add_value_to_db(PropertyValue(product_id=product.get('product_id'),
+                        #                                                     property_id=prop_id,
+                        #                                                     value=value))
+                        # task_list.append(create_task(
+                        #     self._db_worker.add_value_to_db(PropertyValue(product_id=product.get('product_id'),
+                        #                                                   property_id=prop_id,
+                        #                                                   value=value))))
+                # result_list = list(await gather(*task_list))
+                result_list = self._db_worker.add_values_to_db(value_list)
             except Exception as ex:
                 print(f'Exception in _add_properties_data\n{ex}')
             else:
@@ -261,7 +268,7 @@ class Core:
         products_property_list = []
         if items_data:
             try:
-                task_list = []
+                product_list = []
                 key = 1
                 for item in items_data.values():
                     if len(item.get('photos')) > 0 and item.get('photos').get('photo1'):
@@ -278,9 +285,9 @@ class Core:
                         products_property_list.append({'key': key,
                                                        'properties': item.get('properties'),
                                                        'product': product})
-                        task_list.append(create_task(self._db_worker.add_product_to_db(key, product)))
+                        product_list.append((key, product))
                         key += 1
-                result_list = list(await gather(*task_list))
+                result_list = self._db_worker.add_products_to_db(product_list)
             except Exception as ex:
                 print(f'Exception in _add_items_to_database - cat_id: {cat_id}\n{ex}')
             else:
@@ -356,4 +363,6 @@ class Updater(UpdaterInterface, Core):
     def update_data_in_category(self, cat_id: int):
         pass
 
+    def get_category_url(self, cat_id: int):
+        pass
 # if __name__ == '__main__':

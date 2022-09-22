@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Tuple
 
 from .alchemy.postgresql import PostgresHandler, PostgresAsyncHandler
 from .alchemy.sqlite import SQLiteHandler
@@ -10,7 +10,7 @@ class DbWorker(DbWorkerInterface):
 
     def __init__(self):
         self.__pg_handler = PostgresHandler()
-        self.__pg_async_handler = PostgresAsyncHandler()
+        # self.__pg_async_handler = PostgresAsyncHandler()
         self.__sl_handler = SQLiteHandler()
 
     def clear_category(self, cat_id: Category) -> Union[int, None]:
@@ -28,11 +28,11 @@ class DbWorker(DbWorkerInterface):
     def add_property_to_db(self, property_name: str):
         return self.__pg_handler.add_property_to_db(property_name)
 
-    async def add_product_to_db(self, key: int, product: Product) -> Union[Dict[int, int], None]:
-        return await self.__pg_async_handler.add_product_to_db(key, product.dict())
+    def add_products_to_db(self, products: List[Tuple[int, Product]]):
+        return self.__pg_handler.add_products_to_db([(product[0], product[1].dict()) for product in products])
 
-    async def add_value_to_db(self, property_value: PropertyValue) -> Union[int, None]:
-        return await self.__pg_async_handler.add_value_to_db(property_value.dict())
+    def add_values_to_db(self, property_values: List[PropertyValue]):
+        return self.__pg_handler.add_values_to_db([value.dict() for value in property_values])
 
     def save_category_info(self, category: Category):
         return self.__sl_handler.save_category_info(category.dict())

@@ -1,6 +1,6 @@
 from typing import Optional, Tuple
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, and_
 from sqlalchemy.orm import sessionmaker
 
 from settings import SQLITE
@@ -44,14 +44,18 @@ class SQLiteHandler:
             print(f'Exception in SQLiteHandler.save_category_info - data: {category}\n{ex}')
             return None
 
-    # def get_categories(self, cat_id: int) -> Tuple[int, str, str]:
-    #     try:
-    #         with self.__session_mptt() as session:
-    #            category = session.query(CategoryInfoTable).get(cat_id)
-    #
-    #     except Exception as ex:
-    #         print(f'Exception in SQLiteHandler.get_categories - cat_id: {cat_id}\n{ex}')
-    #         return ()
+    def get_category(self, cat_id: int) -> Optional[CategoryInfoTable]:
+        try:
+            with self.__session() as session:
+                category = session.query(CategoryInfoTable).filter(and_(CategoryInfoTable.cat_id == cat_id,
+                                                                        CategoryInfoTable.url != None
+                                                                        )).first()
+
+        except Exception as ex:
+            print(f'Exception in SQLiteHandler.get_categories - cat_id: {cat_id}\n{ex}')
+            return None
+        else:
+            return category
 
     def get_all(self):
         try:

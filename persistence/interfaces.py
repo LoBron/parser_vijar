@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict
+from typing import Optional, List, Tuple
 
 from .validators import Category, Product, PropertyValue
 
@@ -27,11 +27,11 @@ class DbWorkerInterface(ABC):
         pass
 
     @abstractmethod
-    async def add_product_to_db(self, key: int, product: Product) -> Optional[Dict[int, int]]:
+    def add_products_to_db(self, products: List[Tuple[int, Product]]):
         pass
 
     @abstractmethod
-    async def add_value_to_db(self, property_value: PropertyValue) -> Optional[int]:
+    def add_values_to_db(self, property_values: List[PropertyValue]):
         pass
 
     @abstractmethod
