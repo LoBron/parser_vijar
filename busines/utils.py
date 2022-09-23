@@ -22,30 +22,28 @@ class Core:
                  io_loader: IoLoaderInterface = IoLoader(),
                  html_parser: ParserInterface = HTMLParser(),
                  ):
-        self.__main_url = MAIN_URL
-        self._google_worker = google_worker
-        self._db_worker = db_worker
-        self._io_loader = io_loader
-        self._html_parser = html_parser
+        self.main_url = MAIN_URL
+        self.google_worker = google_worker
+        self.db_worker = db_worker
+        self.io_loader = io_loader
+        self.html_parser = html_parser
         self._objects_in_db = {}
-        self.__CATEGORIES = []
-        self.__PRODUCTS = []
-        self.__PROPERTIES = {}
-        self.__VALUES = []
+        self._CATEGORIES = []
+        self._PRODUCTS = []
         set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
     def add_categories_data(self) -> None:
         """Возвращает список с данными(словарями) о категориях"""
-        response_obj = self._io_loader.get_item_response(self.__main_url)
-        categories_data = self._html_parser.get_categories_data(response_obj[1].content, self.__main_url)
+        response_obj = self.io_loader.get_item_response(self.main_url)
+        categories_data = self.html_parser.get_categories_data(response_obj[1].content, self.main_url)
         for cat_0 in categories_data:
             category = Category(name=cat_0.get('name'),
                                 slug=cat_0.get('slug'),
                                 have_childrens=True if cat_0.get('childrens') else False)
-            cat_id_0 = self._db_worker.add_category_to_db(category)
+            cat_id_0 = self.db_worker.add_category_to_db(category)
             category.id = cat_id_0
-            self._db_worker.save_category_info(category)
-            self.__CATEGORIES.append(category)
+            self.db_worker.save_category_info(category)
+            self._CATEGORIES.append(category)
 
             categories_1 = cat_0.get('childrens')
             if categories_1:
@@ -55,10 +53,10 @@ class Core:
                                         url=cat_1.get('url'),
                                         parent_id=cat_id_0,
                                         have_childrens=True if cat_1.get('childrens') else False)
-                    cat_id_1 = self._db_worker.add_category_to_db(category)
+                    cat_id_1 = self.db_worker.add_category_to_db(category)
                     category.id = cat_id_1
-                    self._db_worker.save_category_info(category)
-                    self.__CATEGORIES.append(category)
+                    self.db_worker.save_category_info(category)
+                    self._CATEGORIES.append(category)
 
                     categories_2 = cat_1.get('childrens')
                     if categories_2:
@@ -67,15 +65,15 @@ class Core:
                                                 slug=cat_2.get('slug'),
                                                 url=cat_2.get('url'),
                                                 parent_id=cat_id_1)
-                            cat_id_2 = self._db_worker.add_category_to_db(category)
+                            cat_id_2 = self.db_worker.add_category_to_db(category)
                             category.id = cat_id_2
-                            self._db_worker.save_category_info(category)
-                            self.__CATEGORIES.append(category)
-        print(f'\nCписок с данными о {len(self.__CATEGORIES)} категориях создан\n')
+                            self.db_worker.save_category_info(category)
+                            self._CATEGORIES.append(category)
+        print(f'\nCписок с данными о {len(self._CATEGORIES)} категориях создан\n')
 
     def add_products_data(self) -> None:
         """Добавляет к данным о категоряих данные об их товарах и возвращает полученный список с категориями"""
-        for category in self.__CATEGORIES:
+        for category in self._CATEGORIES:
             if not category.have_childrens:
                 category_url = category.url
                 if category_url:
@@ -89,37 +87,30 @@ class Core:
 
                     self._add_properties_data(products_properties)
 
-    def _add_properties_data(self, products_properties: List[dict]) -> None:
+    def _add_properties_data(self, products_properties: List[dict], PROPERTIES: Dict[str, int] = None) -> None:
         count_properties = 0
         count_values = 0
+        if not PROPERTIES:
+            PROPERTIES = {}
         if products_properties:
             try:
                 value_list = []
                 for product in products_properties:
                     for name, value in product['properties'].items():
-                        prop_id = self.__PROPERTIES.get(name)
+                        prop_id = PROPERTIES.get(name)
                         if not prop_id:
-                            prop_id = self._db_worker.add_property_to_db(name)
-                            self.__PROPERTIES[name] = prop_id
+                            prop_id = self.db_worker.add_property_to_db(name)
+                            PROPERTIES[name] = prop_id
                             count_properties += 1
                         value_list.append(PropertyValue(product_id=product.get('product_id'),
                                                         property_id=prop_id,
                                                         value=value))
-                        # await self._db_worker.add_value_to_db(PropertyValue(product_id=product.get('product_id'),
-                        #                                                     property_id=prop_id,
-                        #                                                     value=value))
-                        # task_list.append(create_task(
-                        #     self._db_worker.add_value_to_db(PropertyValue(product_id=product.get('product_id'),
-                        #                                                   property_id=prop_id,
-                        #                                                   value=value))))
-                # result_list = list(await gather(*task_list))
-                result_list = self._db_worker.add_values_to_db(value_list)
+                result_list = self.db_worker.add_values_to_db(value_list)
             except Exception as ex:
                 print(f'Exception in _add_properties_data\n{ex}')
             else:
                 for result in result_list:
                     if result:
-                        self.__VALUES.append(result)
                         count_values += 1
         print(f'     Добавили {count_properties} свойств, {count_values} значений в базу')
 
@@ -180,9 +171,9 @@ class Core:
         """
         pages_response_list = []
         try:
-            response_page = self._io_loader.get_item_response(category_url)[1].text
+            response_page = self.io_loader.get_item_response(category_url)[1].text
             pages_response_list.append(response_page)
-            amount_pages = self._html_parser.get_amount_pages(response_page)
+            amount_pages = self.html_parser.get_amount_pages(response_page)
             if amount_pages == 0:
                 return pages_response_list
             else:
@@ -191,7 +182,7 @@ class Core:
                 for number_page in range(2, amount_pages + 1):  # range(2, amount_pages + 1):
                     urls[key] = f'{category_url}page-{number_page}'
                     key += 1
-                responses = self._io_loader.get_html_responses(urls)
+                responses = self.io_loader.get_html_responses(urls)
                 for resp in responses.values():
                     if resp[1]:
                         pages_response_list.append(resp[1])
@@ -212,7 +203,7 @@ class Core:
                         photos_response_list.append({'id': c, 'item_id': item_id, 'key': key, 'url': url})
                         urls[c] = url
                         c += 1
-                result_dict = self._io_loader.get_bytes_responses(urls)
+                result_dict = self.io_loader.get_bytes_responses(urls)
             except Exception as ex:
                 print(f'Exception in _get_photos_response_list - Error: {ex}')
             else:
@@ -243,7 +234,7 @@ class Core:
                     c += 1
                 result_dict = {}
                 with ThreadPoolExecutor(max_workers=30) as executor:
-                    future_list = [executor.submit(self._google_worker.upload_file,
+                    future_list = [executor.submit(self.google_worker.upload_file,
                                                    image[0],
                                                    image[1]
                                                    ) for image in images]
@@ -287,7 +278,7 @@ class Core:
                                                        'product': product})
                         product_list.append((key, product))
                         key += 1
-                result_list = self._db_worker.add_products_to_db(product_list)
+                result_list = self.db_worker.add_products_to_db(product_list)
             except Exception as ex:
                 print(f'Exception in _add_items_to_database - cat_id: {cat_id}\n{ex}')
             else:
@@ -300,7 +291,7 @@ class Core:
                     if product_id:
                         products_property_list[i]['product_id'] = product_id
                         products_property_list[i].get('product').id = product_id
-                        self.__PRODUCTS.append(products_property_list[i].pop('product'))
+                        self._PRODUCTS.append(products_property_list[i].pop('product'))
                     else:
                         products_property_list.pop(i)
         return products_property_list
@@ -312,7 +303,7 @@ class Core:
                 urls_dict = {}
                 for key in range(len(products_url_list)):
                     urls_dict[key] = products_url_list[key]
-                result = self._io_loader.get_bytes_responses(urls_dict)
+                result = self.io_loader.get_bytes_responses(urls_dict)
             except Exception as ex:
                 print(f'Exception in _get_items_responses - Error: {ex}')
             else:
@@ -326,7 +317,7 @@ class Core:
         if items_response_list:
             id_ = 1
             for response in items_response_list:
-                data = self._html_parser.get_item_data(item_url=response[0], item_response=response[1])
+                data = self.html_parser.get_item_data(item_url=response[0], item_response=response[1])
                 if data:
                     items_data[id_] = data
                     id_ += 1
@@ -339,7 +330,7 @@ class Core:
         if response_page_list:
             try:
                 for response_page in response_page_list:
-                    urls = self._html_parser.get_items_urls(response_page)
+                    urls = self.html_parser.get_items_urls(response_page)
                     if urls:
                         items_url_list += urls
             except Exception as ex:
@@ -351,8 +342,8 @@ class Core:
 class Creator(CreatorInterface, Core):
 
     def create_all_data(self) -> Dict[int, List[int]]:
-        self._db_worker.clear_all_tables()
-        self._db_worker.delete_category_info()
+        self.db_worker.clear_all_tables()
+        self.db_worker.clear_category_table()
         self.add_categories_data()
         self.add_products_data()
         return self._objects_in_db
@@ -361,8 +352,41 @@ class Creator(CreatorInterface, Core):
 class Updater(UpdaterInterface, Core):
 
     def update_data_in_category(self, cat_id: int):
-        pass
+        category = self.db_worker.get_category(cat_id)
+        photos = self.db_worker.delete_cat_data(cat_id)
+        self._delete_google_photos(photos)
+        self._add_products_data(category)
 
-    def get_category_url(self, cat_id: int):
-        pass
+    def _add_products_data(self, category) -> None:
+        """Добавляет к данным о категоряих данные об их товарах и возвращает полученный список с категориями"""
+        print(f'  Добавляем список с данными о товарах внутри категории {category.name}')
+        products_data_list, products_properties = self._get_products_data(category.url, category.cat_id)
+
+        products = []
+        for product in products_properties:
+            products.append(product.get('product_id'))
+        self._objects_in_db[category.id] = products
+
+        PROPERTIES = self.db_worker.get_properties()
+        self._add_properties_data(products_properties, PROPERTIES)
+
+    def _delete_google_photos(self, photos: Dict[int, Tuple[str]]):
+        photo_id_list = []
+        for photo in photos.values():
+            for id in photo:
+                if id:
+                    photo_id_list.append(id)
+        result_list = []
+        with ThreadPoolExecutor(max_workers=30) as executor:
+            future_list = [executor.submit(self.google_worker.delete_file, photo_id) for photo_id in photo_id_list]
+            for future in as_completed(future_list):
+                result = future.result()
+                if result:
+                    result_list.append(result)
+
+        if len(photo_id_list) == len(result_list):
+            print(f'Удалены все фотографии с гугл диска')
+        else:
+            print(f'Не были удалены {len(photo_id_list) - len(result_list)} фотографий!!!')
+
 # if __name__ == '__main__':

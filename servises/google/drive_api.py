@@ -4,6 +4,7 @@ from io import BytesIO
 from os.path import exists
 from time import sleep
 from typing import Union, Dict, Optional, List
+from apiclient import errors
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -121,7 +122,13 @@ class DriveAPI:
         return files
 
     def delete_file(self, file_id: str) -> Optional[str]:
-        return file_id
+        try:
+            service = build('drive', 'v3', credentials=self.__credentials)
+            service.files().delete(fileId=file_id).execute()
+        except errors.HttpError as error:
+            print('An error occurred: %s' % error)
+        else:
+            return file_id
 
     def upload_file(self, id_: int, data: BytesIO, name: str, mimetype: str) -> Dict[int, Optional[str]]:
         fileId = {id_: None}

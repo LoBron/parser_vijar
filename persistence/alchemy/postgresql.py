@@ -8,7 +8,7 @@ from sqlalchemy.pool import NullPool
 from .mptt import mptt_sessionmaker
 
 from settings import POSTGRES
-from .models import CategoryTable, ProductTable, PropertyTable, PropertyValueTable
+from .models import CategoryTable, ProductTable as PT, PropertyTable, PropertyValueTable as PVT
 
 DATABASE = POSTGRES
 database_name = DATABASE.get('DATABASE_NAME')
@@ -66,9 +66,9 @@ class PostgresHandler:
 
     def clear_all_tables(self):
         with self.__session() as session:
-            session.query(PropertyValueTable).delete(synchronize_session='fetch')
+            session.query(PVT).delete(synchronize_session='fetch')
             session.commit()
-            session.query(ProductTable).delete(synchronize_session='fetch')
+            session.query(PT).delete(synchronize_session='fetch')
             session.commit()
             session.query(PropertyTable).delete(synchronize_session='fetch')
             session.commit()
@@ -90,7 +90,7 @@ class PostgresHandler:
         try:
             with self.__session() as session:
                 for product in products:
-                    prod = ProductTable(**product[1])
+                    prod = PT(**product[1])
                     data.append({'key': product[0], 'product': prod})
                     session.add(prod)
                 session.commit()
@@ -106,12 +106,20 @@ class PostgresHandler:
             session.commit()
             return prop.id
 
+    def get_properties(self) -> Dict[str, int]:
+        with self.__session() as session:
+            data = {}
+            properties = session.query(PropertyTable).all()
+            for property in properties:
+                data[property.name] = property.id
+            return data
+
     def add_values_to_db(self, property_values: List[dict]):
         try:
             with self.__session() as session:
                 value_list = []
                 for value in property_values:
-                    value_list.append(PropertyValueTable(**value))
+                    value_list.append(PVT(**value))
                 session.add_all(value_list)
                 session.commit()
         except Exception as ex:
@@ -121,3 +129,15 @@ class PostgresHandler:
 
     def clear_category(self, cat_id: int):
         pass
+
+    def delete_cat_data(self, cat_id) -> Dict[int, Tuple[str]]:
+        with self.__session() as session:
+            products = session.query(PT).filter(PT.category_id == cat_id).all()
+            data = {}
+            for product in products:
+                data[product.id] = product.photo1, product.photo2, product.photo3, product.photo4
+                session.query(PVT).filter(PVT.product_id == product.id).delete(synchronize_session='fetch')
+                session.commit()
+            session.query(PT).filter(PT.category_id == cat_id).delete(synchronize_session='fetch')
+            session.commit()
+            return data

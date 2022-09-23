@@ -1,5 +1,6 @@
-from typing import Tuple
+from typing import Tuple, Dict
 
+from .alchemy.models import CategoryInfoTable
 from .alchemy.postgresql import PostgresHandler, PostgresAsyncHandler
 from .alchemy.sqlite import SQLiteHandler
 from .interfaces import DbWorkerInterface
@@ -7,6 +8,12 @@ from .validators import *
 
 
 class DbWorker(DbWorkerInterface):
+
+    def get_properties(self) -> Dict[str, int]:
+        return self.__pg_handler.get_properties()
+
+    def delete_cat_data(self, cat_id: int) -> Dict[int, Tuple[str]]:
+        return self.__pg_handler.delete_cat_data(cat_id)
 
     def __init__(self):
         self.__pg_handler = PostgresHandler()
@@ -37,8 +44,11 @@ class DbWorker(DbWorkerInterface):
     def save_category_info(self, category: Category):
         return self.__sl_handler.save_category_info(category.dict())
 
-    def delete_category_info(self) -> None:
-        return self.__sl_handler.delete_category_info()
+    def clear_category_table(self) -> None:
+        return self.__sl_handler.clear_category_table()
+
+    def get_category(self, cat_id: int) -> Optional[CategoryInfoTable]:
+        return self.__sl_handler.get_category(cat_id)
 
 
 # if __name__ == '__main__':

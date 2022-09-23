@@ -31,8 +31,8 @@ class GoogleWorker(GoogleWorkerInterface):
     def search_files(self, category_id: CatId) -> List[str]:
         return self.__drive.search_files(category_id.id)
 
-    def delete_file(self, file_id: FileId) -> Optional[str]:
-        return self.__drive.delete_file(file_id.id)
+    def delete_file(self, file_id: str) -> Optional[str]:
+        return self.__drive.delete_file(file_id)
 
     def upload_file(self, id_: int, image: File) -> Dict[int, Optional[str]]:
         return self.__drive.upload_file(id_, image.data, image.name, image.mimetype)

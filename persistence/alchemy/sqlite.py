@@ -5,7 +5,6 @@ from sqlalchemy.orm import sessionmaker
 
 from settings import SQLITE
 
-from .mptt import mptt_sessionmaker
 from .models import SQLiteBase, CategoryInfoTable
 
 folder_name = SQLITE.get('FOLDER_NAME')
@@ -21,7 +20,7 @@ class SQLiteHandler:
         self.__session = sessionmaker(bind=self.__engine)
         # self.__session_mptt = mptt_sessionmaker(self.__session)
 
-    def delete_category_info(self):
+    def clear_category_table(self):
         try:
             with self.__session() as session:
                 session.query(CategoryInfoTable).delete(synchronize_session='fetch')
@@ -50,7 +49,6 @@ class SQLiteHandler:
                 category = session.query(CategoryInfoTable).filter(and_(CategoryInfoTable.cat_id == cat_id,
                                                                         CategoryInfoTable.url != None
                                                                         )).first()
-
         except Exception as ex:
             print(f'Exception in SQLiteHandler.get_categories - cat_id: {cat_id}\n{ex}')
             return None
@@ -66,12 +64,14 @@ class SQLiteHandler:
             return None
 
 
+
+
 if __name__ == '__main__':
-    cat = {'name': 'Пидорасы',
-           'url': 'https://proglib.io/p/upravlenie-dannymi-s-pomoshchyu-python-sqlite-i-sqlalchemy-2020-10-216',
-           'cat_id': 1006,
-           'parent_id': 1}
+    # cat = {'name': 'Пидорасы',
+    #        'url': 'https://proglib.io/p/upravlenie-dannymi-s-pomoshchyu-python-sqlite-i-sqlalchemy-2020-10-216',
+    #        'cat_id': 1006,
+    #        'parent_id': 1}
     handler = SQLiteHandler()
-    print(handler.get_all())
+    print(handler.get_category(2793).url)
 
     # print(handler.create_category(cat))

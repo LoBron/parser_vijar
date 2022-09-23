@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 
+from .alchemy.models import CategoryInfoTable
 from .validators import Category, Product, PropertyValue
 
 
@@ -39,5 +40,17 @@ class DbWorkerInterface(ABC):
         pass
 
     @abstractmethod
-    def delete_category_info(self):
+    def clear_category_table(self):
+        pass
+
+    @abstractmethod
+    def get_category(self, cat_id: int) -> Optional[CategoryInfoTable]:
+        pass
+
+    @abstractmethod
+    def delete_cat_data(self, cat_id) -> Dict[int, Tuple[str]]:
+        pass
+
+    @abstractmethod
+    def get_properties(self) -> Dict[str, int]:
         pass
