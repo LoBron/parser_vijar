@@ -82,7 +82,7 @@ class Core:
                 print(f'Добавляем данные о товарах в раздел {category.name}')
                 continue
             if category.level == 1 and category.have_childrens:
-                print(f'    Добавляем данные о товарах в подраздел {category.name}')
+                print(f'\n    Добавляем данные о товарах в подраздел {category.name}')
                 continue
             if not category.have_childrens:
                 category_url = category.url
@@ -131,10 +131,10 @@ class Core:
             pages_response_list = self._get_pages_response_list(category_url=category_url)
             print(f'        - получили responces {len(pages_response_list)} шт')
 
-            products_url_list = self._get_items_url_list(pages_response_list[:])
+            products_url_list = self._get_items_url_list(pages_response_list[:1])
             print(f'        - получили items_urls товаров {len(products_url_list)} шт')
 
-            products_response_list = self._get_items_responses(products_url_list[:])
+            products_response_list = self._get_items_responses(products_url_list[:5])
             print(f'        - получили response_items товаров {len(products_response_list)} шт')
 
             # getting products data
@@ -181,7 +181,8 @@ class Core:
         try:
             response_page = self.io_loader.get_item_response(category_url)[1].text
             pages_response_list.append(response_page)
-            amount_pages = self.html_parser.get_amount_pages(response_page)
+            amount_pages = 0
+            # amount_pages = self.html_parser.get_amount_pages(response_page)
             if amount_pages == 0:
                 return pages_response_list
             else:
