@@ -144,28 +144,40 @@ class DriveAPI:
                 Id = file.get("id")
             except HttpError as error:
                 if n <= 5:
-                    if error.resp.status == '403' and error.reason == 'User rate limit exceeded.':
+                    # if error.resp.status == '403' and error.reason == 'User rate limit exceeded.':
+                    if 400 <= int(error.resp.status) < 500:
                         sleep(t)
                         n += 1
                         t *= 2
                     else:
                         Id = None
+                        print(f'Upload file error - {error}')
                         break
+                else:
+                    Id = None
+                    print(f'Upload file error - {error}')
+                    break
             else:
                 break
         if Id:
             n = 1
             t = 0.5
             user_permission = {'type': 'anyone', 'value': 'anyone', 'role': 'reader'}
-            while n <= 5:
+            while True:
                 try:
                     service.permissions().create(fileId=Id, body=user_permission).execute()
                 except HttpError as error:
-                    if error.resp.status == '403' and error.reason == 'User rate limit exceeded.':
-                        sleep(t)
-                        n += 1
-                        t *= 2
+                    if n <= 5:
+                        # if error.resp.status == '403' and error.reason == 'User rate limit exceeded.':
+                        if 400 <= int(error.resp.status) < 500:
+                            sleep(t)
+                            n += 1
+                            t *= 2
+                        else:
+                            print(f'Upload permissions error - {error}')
+                            break
                     else:
+                        print(f'Upload permissions error - {error}')
                         break
                 else:
                     fileId[id_] = Id

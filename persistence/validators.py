@@ -12,6 +12,7 @@ class Category(BaseModel):
     name: str
     slug: str
     url: Optional[HttpUrl] = None
+    level: int
 
 
 class Product(BaseModel):

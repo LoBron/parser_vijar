@@ -27,6 +27,7 @@ class Core:
         self.db_worker = db_worker
         self.io_loader = io_loader
         self.html_parser = html_parser
+        self.PROPERTIES = {}
         self._objects_in_db = {}
         self._CATEGORIES = []
         self._PRODUCTS = []
@@ -39,7 +40,8 @@ class Core:
         for cat_0 in categories_data:
             category = Category(name=cat_0.get('name'),
                                 slug=cat_0.get('slug'),
-                                have_childrens=True if cat_0.get('childrens') else False)
+                                have_childrens=True if cat_0.get('childrens') else False,
+                                level=0)
             cat_id_0 = self.db_worker.add_category_to_db(category)
             category.id = cat_id_0
             self.db_worker.save_category_info(category)
@@ -52,7 +54,8 @@ class Core:
                                         slug=cat_1.get('slug'),
                                         url=cat_1.get('url'),
                                         parent_id=cat_id_0,
-                                        have_childrens=True if cat_1.get('childrens') else False)
+                                        have_childrens=True if cat_1.get('childrens') else False,
+                                        level=1)
                     cat_id_1 = self.db_worker.add_category_to_db(category)
                     category.id = cat_id_1
                     self.db_worker.save_category_info(category)
@@ -64,7 +67,8 @@ class Core:
                             category = Category(name=cat_2.get('name'),
                                                 slug=cat_2.get('slug'),
                                                 url=cat_2.get('url'),
-                                                parent_id=cat_id_1)
+                                                parent_id=cat_id_1,
+                                                level=2)
                             cat_id_2 = self.db_worker.add_category_to_db(category)
                             category.id = cat_id_2
                             self.db_worker.save_category_info(category)
@@ -74,10 +78,16 @@ class Core:
     def add_products_data(self) -> None:
         """Добавляет к данным о категоряих данные об их товарах и возвращает полученный список с категориями"""
         for category in self._CATEGORIES:
+            if category.level == 0:
+                print(f'Добавляем данные о товарах в раздел {category.name}')
+                continue
+            if category.level == 1 and category.have_childrens:
+                print(f'    Добавляем данные о товарах в подраздел {category.name}')
+                continue
             if not category.have_childrens:
                 category_url = category.url
                 if category_url:
-                    print(f'  Добавляем список с данными о товарах внутри категории {category.name}')
+                    print(f'\n        Добавляем данные о товарах из категории {category.name}')
                     products_data_list, products_properties = self._get_products_data(category_url, category.id)
 
                     products = []
@@ -87,20 +97,18 @@ class Core:
 
                     self._add_properties_data(products_properties)
 
-    def _add_properties_data(self, products_properties: List[dict], PROPERTIES: Dict[str, int] = None) -> None:
+    def _add_properties_data(self, products_properties: List[dict]) -> None:
         count_properties = 0
         count_values = 0
-        if not PROPERTIES:
-            PROPERTIES = {}
         if products_properties:
             try:
                 value_list = []
                 for product in products_properties:
                     for name, value in product['properties'].items():
-                        prop_id = PROPERTIES.get(name)
+                        prop_id = self.PROPERTIES.get(name)
                         if not prop_id:
                             prop_id = self.db_worker.add_property_to_db(name)
-                            PROPERTIES[name] = prop_id
+                            self.PROPERTIES[name] = prop_id
                             count_properties += 1
                         value_list.append(PropertyValue(product_id=product.get('product_id'),
                                                         property_id=prop_id,
@@ -112,7 +120,7 @@ class Core:
                 for result in result_list:
                     if result:
                         count_values += 1
-        print(f'     Добавили {count_properties} свойств, {count_values} значений в базу')
+        print(f'        - Добавили {count_properties} свойств, {count_values} значений в базу')
 
     def _get_products_data(self, category_url: str, cat_id: int) -> tuple:
         """
@@ -121,25 +129,25 @@ class Core:
         """
         try:
             pages_response_list = self._get_pages_response_list(category_url=category_url)
-            print(f'     получили responces {len(pages_response_list)} шт')
+            print(f'        - получили responces {len(pages_response_list)} шт')
 
-            products_url_list = self._get_items_url_list(pages_response_list[:1])
-            print(f'     получили items_urls товаров {len(products_url_list)} шт')
+            products_url_list = self._get_items_url_list(pages_response_list[:])
+            print(f'        - получили items_urls товаров {len(products_url_list)} шт')
 
             products_response_list = self._get_items_responses(products_url_list[:])
-            print(f'     получили response_items товаров {len(products_response_list)} шт')
+            print(f'        - получили response_items товаров {len(products_response_list)} шт')
 
             # getting products data
             products_data_dict, products_data_list = self._get_items_data(products_response_list)
-            print(f'     Получили данные о {len(products_data_list)} товарах')
+            print(f'        - Получили данные о {len(products_data_list)} товарах')
 
             # getting images in bytes
             count_responses, photos_response_list = self._get_photos_response_list(products_data_dict)
-            print(f'     Получили {count_responses} изображений')
+            print(f'        - Получили {count_responses} изображений')
 
             # uploading images to Google drive and getting their Google File IDs
             count_photos, photos_id_list = self._get_photos_id_list(photos_response_list)
-            print(f'     Загрузили {count_photos} изображений в гугл')
+            print(f'        - Загрузили {count_photos} изображений в гугл')
 
             # replacing image URLs in products with Google File IDs
             if photos_id_list:
@@ -157,7 +165,7 @@ class Core:
 
             # adding products data to the servises
             products_property_list = run(self._add_items_to_database(products_data_dict, cat_id))
-            print(f'     Добавили {len(products_property_list)} товаров в базу')
+            print(f'        - Добавили {len(products_property_list)} товаров в базу')
 
             return products_data_list, products_property_list
         except Exception as ex:
@@ -367,8 +375,8 @@ class Updater(UpdaterInterface, Core):
             products.append(product.get('product_id'))
         self._objects_in_db[category.id] = products
 
-        PROPERTIES = self.db_worker.get_properties()
-        self._add_properties_data(products_properties, PROPERTIES)
+        self.PROPERTIES.update(self.db_worker.get_properties())
+        self._add_properties_data(products_properties)
 
     def _delete_google_photos(self, photos: Dict[int, Tuple[str]]):
         photo_id_list = []

@@ -83,3 +83,4 @@ class CategoryInfoTable(SQLiteBase):
     name = Column(String(50))
     url = Column(String(200), unique=True)
     cat_id = Column(Integer, unique=True)
+    level = Column(Integer)

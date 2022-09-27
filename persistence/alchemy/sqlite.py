@@ -35,6 +35,7 @@ class SQLiteHandler:
                 cat.name = category.get('name')
                 cat.url = category.get('url')
                 cat.cat_id = category.get('id')
+                cat.level = category.get('level')
                 # cat.parent_id = category.get('parent_id')
                 session.add(cat)
                 session.commit()

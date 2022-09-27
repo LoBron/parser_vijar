@@ -52,12 +52,12 @@ class HTMLParser(ParserInterface):
                     else:
                         href_list_1 = links_1[0]["href"].split("/")
                         href = f'/{href_list_1[-3]}/{href_list_1[-2]}/'
+                        cat_1_childrens = item_1.select('.dropdown__list-item')
                         cat_1 = {'name': cat_1_name,
                                  'slug': href.split('/')[-2],
-                                 'url': main_url[:-8] + href}
+                                 'url': main_url[:-8] + href if not len(cat_1_childrens) else None}
 
-                        cat_1_childrens = item_1.select('.dropdown__list-item')
-                        if len(cat_1_childrens) > 0:
+                        if len(cat_1_childrens):
                             for item_2 in cat_1_childrens[:]:  # cat_1_childrens[:] #####################
                                 links_2 = item_2.find_all('a')
                                 cat_2_name = links_2[0].text.strip()
